@@ -31,6 +31,7 @@ import InventoryPanel from "@/components/menus/InventoryPanel";
 import SettingsMenu from "@/components/menus/SettingsMenu";
 import { play } from "@/lib/sfx";
 import "./game.css";
+import { speak } from "@/lib/narrator";
 
 // Hotbar: keys 1–7 walk to that station and use it
 const SLOTS: { id: StationId; key: string; icon: string; label: string; task: TaskId }[] = [
@@ -174,6 +175,7 @@ export default function GameScreen({ dest, name, weather, apod, paused = false, 
       const now = performance.now();
       setToasts((old) => [...old.filter((t) => now - t.born < 5000), ...fresh.map((t) => ({ ...t, born: now }))].slice(-4));
       const kinds = fresh.map((t) => t.kind);
+      speak(fresh[fresh.length - 1].text);
       if (fresh.some((t) => t.text.startsWith("⚠ BREAKDOWN") || t.text.includes("failed!"))) play("break");
       else if (kinds.includes("fact")) play("fact");
       else if (kinds.includes("bad")) play("alarm");
@@ -182,6 +184,7 @@ export default function GameScreen({ dest, name, weather, apod, paused = false, 
     // pop-up cards
     const top = s.cards[0] ?? null;
     if (top !== live.current.card) {
+      if (top) speak([top.title, ...top.lines].join(". "));
       if (top?.kind === "storm") play("alarm");
       if (top?.kind === "houston") play("radio");
       setCard(top);
@@ -265,6 +268,7 @@ export default function GameScreen({ dest, name, weather, apod, paused = false, 
 
   const anyOverlay = paused || menu !== "none" || !!card || !!repairing || hud.status !== "playing";
   useEffect(() => engine.current?.setPaused(anyOverlay), [anyOverlay]);
+  useEffect(() => { speak(hud.hint, false); }, [hud.hint]);
 
   // win / lose
   useEffect(() => {

@@ -15,14 +15,18 @@ export function pickVoice(synth: SpeechSynthesis): SpeechSynthesisVoice | undefi
   return voices.find((v) => v.lang === "en-US") ?? voices.find((v) => v.lang.startsWith("en"));
 }
 
-export function speak(text: string) {
+export function speak(text: string, interrupt = true) {
   if (typeof window === "undefined") return;
   const synth = window.speechSynthesis;
   const volume = getSettings().narrator;
   if (!synth || volume === 0) return; // 0 = narrator off
+  if (!interrupt && synth.speaking) return; // don't cut off something more important
+
+  // remove emojis like ⚠ ☢ 🔌 so they aren't read out loud
+  const clean = text.replace(/[\u2600-\u27BF]|[\uD83C-\uDBFF][\uDC00-\uDFFF]|\uFE0F/g, "");
 
   synth.cancel(); // stop the old line so lines don't pile up
-  const u = new SpeechSynthesisUtterance(text);
+  const u = new SpeechSynthesisUtterance(clean);
   const v = pickVoice(synth);
   if (v) u.voice = v;
   u.lang = "en-US";

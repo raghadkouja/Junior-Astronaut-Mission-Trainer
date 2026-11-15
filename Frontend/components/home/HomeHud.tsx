@@ -181,7 +181,7 @@ export default function HomeHud({ screen, dest, setDest, name, setName, onLaunch
       window.speechSynthesis?.cancel(); // stop talking right away
     } else {
       setSettings({ narrator: 7 });
-      speak(`Narrator on. ${d.blurb}`);
+      speak(`Narrator on. ${fact.text}`);
     }
   }
   const fact = useRotatingFact(dest);
