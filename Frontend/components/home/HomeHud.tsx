@@ -172,7 +172,8 @@ function Waveform() {
 
 export default function HomeHud({ screen, dest, setDest, name, setName, onLaunch, onBegin, onSettings, weather }: Props) {
   const d = destinations[dest];
-    const settings = useSettings();
+  const fact = useRotatingFact(dest);
+  const settings = useSettings();
   const narratorOn = settings.narrator > 0;
 
   function toggleNarrator() {
@@ -184,7 +185,24 @@ export default function HomeHud({ screen, dest, setDest, name, setName, onLaunch
       speak(`Narrator on. ${fact.text}`);
     }
   }
-  const fact = useRotatingFact(dest);
+  // Browsers block speech until the first click/key press,
+  // so greet the player the moment they interact.
+  useEffect(() => {
+    const hello = () =>
+      speak("Welcome, astronaut! Pick the Moon or Mars, then press Launch Mission.", false);
+    window.addEventListener("click", hello, { once: true });
+    window.addEventListener("keydown", hello, { once: true });
+    return () => {
+      window.removeEventListener("click", hello);
+      window.removeEventListener("keydown", hello);
+    };
+  }, []);
+
+  // Read each new fact as it rotates (only if the narrator is on)
+  useEffect(() => {
+    speak(fact.text, false);
+  }, [fact.text]);
+
   const clock = useEarthClock();
   const cleanName = name.trim();
   // slow computer → show a still picture instead of the video
