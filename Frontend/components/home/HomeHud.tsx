@@ -14,6 +14,8 @@ import type { SpaceWeather } from "@/lib/mission/nasaData";
 import { destinations } from "@/lib/turn-game/destinations";
 import { guessQuality } from "@/components/game/outpostEngine";
 import "./hud.css";
+import { setSettings, useSettings } from "@/lib/settings";
+import { speak } from "@/lib/narrator";
 
 type Props = {
   screen: "title" | "name";
@@ -160,6 +162,18 @@ function Waveform() {
 
 export default function HomeHud({ screen, dest, setDest, name, setName, onLaunch, onBegin, onSettings, weather }: Props) {
   const d = destinations[dest];
+    const settings = useSettings();
+  const narratorOn = settings.narrator > 0;
+
+  function toggleNarrator() {
+    if (narratorOn) {
+      setSettings({ narrator: 0 });
+      window.speechSynthesis?.cancel(); // stop talking right away
+    } else {
+      setSettings({ narrator: 7 });
+      speak(`Narrator on. ${d.blurb}`);
+    }
+  }
   const clock = useEarthClock();
   const cleanName = name.trim();
   // slow computer → show a still picture instead of the video
@@ -355,7 +369,14 @@ export default function HomeHud({ screen, dest, setDest, name, setName, onLaunch
         ) : (
           <p className="deck-hint">Type your name in the window above ↑</p>
         )}
-
+        <button
+          className={`dest-key ${narratorOn ? "active" : ""}`}
+          onClick={toggleNarrator}
+          aria-pressed={narratorOn}
+          title="Read the game out loud"
+        >
+          {narratorOn ? "🔊 NARRATOR: ON" : "🔈 NARRATOR: OFF"}
+        </button>
         <button className="dest-key" onClick={onSettings} title="Music and sound volume">
           ⚙ SETTINGS · ESC
         </button>

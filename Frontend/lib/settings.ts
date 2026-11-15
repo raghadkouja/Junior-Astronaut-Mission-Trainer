@@ -6,8 +6,8 @@
 
 import { useSyncExternalStore } from "react";
 
-export type Settings = { music: number; sounds: number }; // 0–10 each
-export const DEFAULT_SETTINGS: Settings = { music: 6, sounds: 7 };
+export type Settings = { music: number; sounds: number; narrator: number }; // 0–10 each
+export const DEFAULT_SETTINGS: Settings = { music: 6, sounds: 7, narrator: 0 };
 const KEY = "jamt-settings";
 
 let current: Settings = DEFAULT_SETTINGS;
@@ -36,6 +36,7 @@ export function setSettings(patch: Partial<Settings>) {
   current = {
     music: clamp(patch.music ?? current.music),
     sounds: clamp(patch.sounds ?? current.sounds),
+    narrator: clamp(patch.narrator ?? current.narrator),
   };
   try {
     window.localStorage.setItem(KEY, JSON.stringify(current));

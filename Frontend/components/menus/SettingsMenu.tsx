@@ -19,7 +19,7 @@ import { resetSettings, setSettings, useSettings } from "@/lib/settings";
 import { play } from "@/lib/sfx";
 import "./menus.css";
 
-type Row = "music" | "sounds" | "default" | "exit";
+type Row = "music" | "sounds" | "narrator" | "default" | "exit";
 
 export default function SettingsMenu({
   onClose,
@@ -31,12 +31,13 @@ export default function SettingsMenu({
   exitLabel?: string;
 }) {
   const s = useSettings();
-  const rows: Row[] = onExit ? ["music", "sounds", "default", "exit"] : ["music", "sounds", "default"];
+  const rows: Row[] = onExit ? ["music", "sounds", "narrator", "default", "exit"] : ["music", "sounds", "narrator", "default"];
   const [sel, setSel] = useState(0);
 
   function change(row: Row, d: number) {
     if (row === "music") setSettings({ music: s.music + d });
     if (row === "sounds") setSettings({ sounds: s.sounds + d });
+    if (row === "narrator") setSettings({ narrator: s.narrator + d });
     play("move");
   }
   function activate(row: Row) {
@@ -96,7 +97,7 @@ export default function SettingsMenu({
           {rows.map((row, i) => {
             const on = i === sel;
             const label = row === "exit" ? exitLabel : row.toUpperCase();
-            const slider = row === "music" || row === "sounds";
+            const slider = row === "music" || row === "sounds" || row === "narrator";
             return (
               <li key={row} className={`sm-row ${on ? "sel" : ""}`} onPointerEnter={() => setSel(i)}>
                 <span className="sm-cursor">{on ? "▶" : ""}</span>
@@ -105,7 +106,7 @@ export default function SettingsMenu({
                     <span className="sm-label">{label}</span>
                     <span className="sm-dots" />
                     <button className="sm-arrow" aria-label={`Lower ${label}`} onClick={() => change(row, -1)}>◀</button>
-                    {bar(row === "music" ? s.music : s.sounds)}
+                    {bar(row === "music" ? s.music : row === "sounds" ? s.sounds : s.narrator)}
                     <button className="sm-arrow" aria-label={`Raise ${label}`} onClick={() => change(row, +1)}>▶</button>
                   </>
                 ) : (
