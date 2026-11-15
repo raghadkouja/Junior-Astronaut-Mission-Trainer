@@ -265,6 +265,12 @@ export default function HomeHud({ screen, dest, setDest, name, setName, onLaunch
           ) : (
             <video
               key={dest}
+              ref={(v) => {
+                if (v) {
+                  v.muted = true;
+                  v.play().catch(() => {}); // if the browser still says no, the poster stays
+                }
+              }}
               className="hud-video show"
               src={d.video}
               poster={d.poster}
