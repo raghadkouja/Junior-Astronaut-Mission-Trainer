@@ -1,8 +1,3 @@
-/* =========================================================
-   components/menus/menus.css  (NEW)
-   ESC settings menu (retro pixel style) + E inventory (space theme).
-   No blur or heavy shadows, so it stays smooth on slow computers.
-   ========================================================= */
 
 /* ---------- ESC: settings ---------- */
 .sm-backdrop {
@@ -134,9 +129,6 @@
   background: rgba(8, 18, 34, 0.9);
   border: 2px solid var(--dim);
 }
-.inv-gear { display: flex; gap: 8px; }
-.inv-avatar { display: flex; align-items: center; gap: 8px; }
-.inv-gearcol { display: flex; flex-direction: column; gap: 8px; }
 .inv-portrait {
   width: 140px;
   height: 180px;
@@ -152,9 +144,30 @@
   font-weight: 800;
   letter-spacing: 0.2em;
 }
-.inv-sub { margin: 0; font-size: 11px; color: #9eeefc; text-align: center; }
 .inv-head { margin: 6px 0 0; font-size: 11px; letter-spacing: 0.25em; color: var(--line); font-weight: 800; }
-.inv-tools { display: grid; grid-template-columns: repeat(3, 46px); gap: 8px; }
+
+/* radiation bar under the name plate */
+.inv-radbox { --rad: #7dffb0; box-sizing: border-box; width: 100%; padding: 8px 10px; background: #0c1a2c; border: 2px solid #22476e; }
+.inv-radbox.mid { --rad: #ffd23f; border-color: #8a6a1e; }
+.inv-radbox.high { --rad: #ff5a4f; border-color: #ff5a4f; }
+.inv-radhead { display: flex; justify-content: space-between; margin: 0 0 6px; font-size: 11px; font-weight: 800; letter-spacing: 0.2em; color: var(--line); }
+.inv-radhead b { color: var(--rad); letter-spacing: 0.06em; }
+.inv-radbar { position: relative; height: 12px; background: #050a14; outline: 1px solid var(--dim); overflow: hidden; }
+.inv-radbar .zone { position: absolute; top: 0; bottom: 0; }
+.inv-radbar .zone.slow { background: repeating-linear-gradient(135deg, rgba(255, 210, 63, 0.22) 0 4px, transparent 4px 8px); }
+.inv-radbar .zone.heavy { background: repeating-linear-gradient(135deg, rgba(255, 90, 79, 0.3) 0 4px, transparent 4px 8px); }
+.inv-radbar .fill { position: absolute; left: 0; top: 2px; bottom: 2px; background: var(--rad); transition: width 0.3s; }
+.inv-radtxt { margin: 6px 0 0; font-size: 11px; line-height: 1.35; color: #d8f8ff; }
+.inv-radtxt.dim { margin-top: 2px; font-size: 10px; color: #7d9ab3; }
+
+/* outpost status (replaces the old tools grid) */
+.inv-status { box-sizing: border-box; width: 100%; margin: 0; display: grid; gap: 4px; }
+.inv-status > div { display: flex; justify-content: space-between; gap: 8px; padding: 5px 8px; background: #0c1a2c; border-left: 3px solid #ffb347; font-size: 11px; }
+.inv-status > div.off { border-left-color: #8f9de0; }
+.inv-status dt { letter-spacing: 0.14em; color: #9eeefc; font-weight: 800; }
+.inv-status dd { margin: 0; text-align: right; color: #ffd9a8; }
+.inv-status > div.off dd { color: #c7d0ff; }
+.inv-status em { font-style: normal; color: #7d9ab3; }
 
 .inv-right { display: flex; flex-direction: column; min-height: 0; }
 .inv-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
@@ -191,6 +204,21 @@
 .inv-alert p { margin: 4px 0 0; }
 .inv-alert em { color: #ffd36b; font-style: normal; }
 .inv-note { margin: 10px 0 0; font-size: 12px; color: #9eeefc; }
+
+/* mission log (objectives tab) */
+.inv-loghead { margin-top: 18px; padding-top: 10px; border-top: 1px dashed var(--dim); }
+.inv-log { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 3px; font-size: 12px; }
+.inv-log li { padding: 4px 8px; background: #0a1626; color: #c9d6e6; }
+.inv-log li:first-child { color: #fff; border-left: 3px solid var(--line); }
+
+/* settings + controls tab */
+.inv-settings .sm-list { margin-top: 8px; }
+.inv-settings .sm-row { font-size: 15px; min-height: 34px; }
+.inv-settings .sm-label { min-width: 90px; }
+.inv-controls { margin: 8px 0 0; display: grid; gap: 4px; }
+.inv-controls > div { display: grid; grid-template-columns: minmax(150px, 38%) 1fr; gap: 10px; align-items: center; padding: 5px 8px; background: #0c1a2c; }
+.inv-controls dt { justify-self: start; padding: 2px 6px; border: 1.5px solid #ffb347; color: #ffd36b; font-size: 11px; font-weight: 800; letter-spacing: 0.08em; }
+.inv-controls dd { margin: 0; font-size: 12px; }
 
 .inv-apod { display: flex; gap: 12px; align-items: center; margin-bottom: 12px; padding: 8px; background: #0c1a2c; border: 2px solid #22476e; }
 .inv-apod img, .inv-apod-empty { width: 120px; height: 80px; object-fit: cover; border: 2px solid var(--dim); display: grid; place-items: center; font-size: 34px; background: #050a14; }

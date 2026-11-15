@@ -351,7 +351,7 @@ b.cool { color: var(--c); } b.warm { color: var(--amber); } b.hot { color: var(-
 .dest-keys { display: flex; gap: 0.7rem; }
 .dest-key {
   display: flex; align-items: center; gap: 0.55rem;
-  padding: 0.6rem 1.4rem;
+  padding: 0.6rem 0.4rem;
   border: 1.5px solid var(--c-dim);
   background: rgba(59, 232, 255, 0.05);
   color: #9eeefc;

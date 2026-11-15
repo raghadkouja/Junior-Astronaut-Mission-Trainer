@@ -1,18 +1,5 @@
 "use client";
 
-/**
- * SettingsMenu.tsx  (NEW)
- * FILE LOCATION: Frontend/components/menus/SettingsMenu.tsx
- * STYLES:        Frontend/components/menus/menus.css
- *
- * Retro pause menu that opens with ESC (design from the TODO doc):
- *   MUSIC ........ ◀ ▮▮▮▮▮▮▯▯▯▯ ▶
- *   SOUNDS ....... ◀ ▮▮▮▮▮▮▮▯▯▯ ▶
- *   DEFAULT
- *   EXIT
- * Keyboard: ↑ ↓ (or W S) choose, ← → (or A D) change, ENTER select, ESC close.
- * Mouse/touch: click the arrows or the words.
- */
 
 import { useEffect, useState } from "react";
 import { resetSettings, setSettings, useSettings } from "@/lib/settings";
@@ -21,15 +8,7 @@ import "./menus.css";
 
 type Row = "music" | "sounds" | "narrator" | "default" | "exit";
 
-export default function SettingsMenu({
-  onClose,
-  onExit,
-  exitLabel = "EXIT",
-}: {
-  onClose: () => void;
-  onExit?: () => void; // leave the mission (hidden on the title screen)
-  exitLabel?: string;
-}) {
+export function SettingsRows({ onExit, exitLabel = "EXIT" }: { onExit?: () => void; exitLabel?: string }) {
   const s = useSettings();
   const rows: Row[] = onExit ? ["music", "sounds", "narrator", "default", "exit"] : ["music", "sounds", "narrator", "default"];
   const [sel, setSel] = useState(0);
@@ -52,11 +31,6 @@ export default function SettingsMenu({
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const k = e.key.toLowerCase();
-      if (k === "escape") {
-        e.preventDefault();
-        onClose();
-        return;
-      }
       const row = rows[sel];
       if (k === "arrowup" || k === "w") {
         e.preventDefault();
@@ -90,9 +64,59 @@ export default function SettingsMenu({
   );
 
   return (
+    <ul className="sm-list">
+      {rows.map((row, i) => {
+        const on = i === sel;
+        const label = row === "exit" ? exitLabel : row.toUpperCase();
+        const slider = row === "music" || row === "sounds";
+        return (
+          <li key={row} className={`sm-row ${on ? "sel" : ""}`} onPointerEnter={() => setSel(i)}>
+            <span className="sm-cursor">{on ? "▶" : ""}</span>
+            {slider ? (
+              <>
+                <span className="sm-label">{label}</span>
+                <span className="sm-dots" />
+                <button className="sm-arrow" aria-label={`Lower ${label}`} onClick={() => change(row, -1)}>◀</button>
+                {bar(row === "music" ? s.music : s.sounds)}
+                <button className="sm-arrow" aria-label={`Raise ${label}`} onClick={() => change(row, +1)}>▶</button>
+              </>
+            ) : (
+              <button className="sm-label sm-action" onClick={() => activate(row)}>
+                {label}
+              </button>
+            )}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+export default function SettingsMenu({
+  onClose,
+  onExit,
+  exitLabel = "EXIT",
+}: {
+  onClose: () => void;
+  onExit?: () => void; // leave the mission (hidden on the title screen)
+  exitLabel?: string;
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  return (
     <div className="sm-backdrop" role="dialog" aria-label="Settings" onPointerDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className="sm-panel">
         <p className="sm-title">SETTINGS</p>
+<<<<<<< HEAD
         <ul className="sm-list">
           {rows.map((row, i) => {
             const on = i === sel;
@@ -118,6 +142,9 @@ export default function SettingsMenu({
             );
           })}
         </ul>
+=======
+        <SettingsRows onExit={onExit} exitLabel={exitLabel} />
+>>>>>>> 3c88e874a470225bae72a7606ab04ac5ec39dc8d
         <p className="sm-help">↑↓ CHOOSE · ←→ CHANGE · ENTER SELECT · ESC RESUME</p>
       </div>
     </div>

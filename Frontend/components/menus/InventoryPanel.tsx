@@ -1,25 +1,15 @@
 "use client";
 
-/**
- * InventoryPanel.tsx  (NEW)
- * FILE LOCATION: Frontend/components/menus/InventoryPanel.tsx
- * STYLES:        Frontend/components/menus/menus.css
- *
- * Opens with E (design from the TODO doc, in a space theme):
- *   LEFT   = your astronaut, name plate, suit gear and tools
- *   RIGHT  = OBJECTIVES · FACT BOOK · DATA SOURCES (instead of an item grid)
- *   BOTTOM = hotbar of spare parts for repairs
- * A new Fact Book card unlocks every 2–3 finished jobs.
- */
 
 import { useEffect, useRef, useState } from "react";
-import { FAULTS, PARTS, RADIATION } from "@/lib/mission/config";
+import { FAULTS, PARTS, RADIATION, radiationSpeed } from "@/lib/mission/config";
 import type { Dest, PartId, SystemId } from "@/lib/mission/config";
 import { SOURCE_LABEL, factsFor } from "@/lib/mission/facts";
 import type { Apod, SpaceWeather } from "@/lib/mission/nasaData";
 import { prettyDate } from "@/lib/mission/nasaData";
 import type { Objective } from "@/lib/mission/sim";
 import { drawPortrait } from "@/components/game/outpostEngine";
+import { SettingsRows } from "./SettingsMenu";
 import { play } from "@/lib/sfx";
 import "./menus.css";
 
@@ -36,29 +26,44 @@ export type InventoryData = {
   sick: boolean;
   weather: SpaceWeather | null;
   apod: Apod | null;
+  log: string[]; //         newest first
+  // outpost status (same numbers as under the clock on the game screen)
+  solarPct: number;
+  solarEff: number;
+  outsideC: number;
+  oneWay: string;
+  commsWeak: boolean;
+  calling: number; //       seconds until Houston replies, -1 = no call
 };
 
-type Tab = "objectives" | "facts" | "sources";
+export type Tab = "objectives" | "facts" | "sources" | "settings";
+const TABS: Tab[] = ["objectives", "facts", "sources", "settings"];
 
-const GEAR = [
-  { icon: "🪖", name: "Helmet + lamp" },
-  { icon: "🧑‍🚀", name: "Spacesuit" },
-  { icon: "🧤", name: "Gloves" },
-  { icon: "🥾", name: "Moon boots" },
-  { icon: "🫧", name: "Oxygen pack" },
-  { icon: "☢️", name: "Dosimeter" },
-];
-const TOOLS = [
-  { icon: "🔧", name: "Wrench" },
-  { icon: "🪛", name: "Screwdriver" },
-  { icon: "📟", name: "Multimeter" },
-  { icon: "🧹", name: "Panel brush" },
-  { icon: "🔦", name: "Flashlight" },
-  { icon: "📻", name: "Radio" },
+const CONTROLS: [string, string][] = [
+  ["W A S D / ARROWS", "Walk around the outpost"],
+  ["SHIFT (hold)", "Sprint (not while resting)"],
+  ["SPACE / ENTER / F", "Use the building you are standing next to"],
+  ["CLICK", "Walk to a spot, or walk to a building and use it"],
+  ["1 – 7", "Walk to a station and use it (same as the hotbar)"],
+  ["E / TAB / I", "Open or close this inventory"],
+  ["ESC", "Open settings · close any menu"],
+  ["1 2 3 4 (in here)", "Switch tabs"],
 ];
 
-export default function InventoryPanel({ data, onClose }: { data: InventoryData; onClose: () => void }) {
-  const [tab, setTab] = useState<Tab>("objectives");
+export default function InventoryPanel({
+  data,
+  onClose,
+  initialTab = "objectives",
+  onExit,
+  exitLabel,
+}: {
+  data: InventoryData;
+  onClose: () => void;
+  initialTab?: Tab;
+  onExit?: () => void;
+  exitLabel?: string;
+}) {
+  const [tab, setTab] = useState<Tab>(initialTab);
   const [open, setOpen] = useState<string | null>(null);
   const portrait = useRef<HTMLCanvasElement>(null);
   const all = factsFor(data.dest);
@@ -74,9 +79,8 @@ export default function InventoryPanel({ data, onClose }: { data: InventoryData;
         e.preventDefault();
         onClose();
       }
-      if (k === "1") setTab("objectives");
-      if (k === "2") setTab("facts");
-      if (k === "3") setTab("sources");
+      const n = Number(k);
+      if (n >= 1 && n <= TABS.length) setTab(TABS[n - 1]);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -90,6 +94,11 @@ export default function InventoryPanel({ data, onClose }: { data: InventoryData;
   const w = data.weather;
   const donkiStatus = !w ? "Loading…" : w.live ? "LIVE" : "ARCHIVED";
 
+  // radiation bar: 0 → career limit, with the "slows you down" zone marked
+  const radPct = (v: number) => Math.min(100, (v / RADIATION.careerLimit) * 100);
+  const speed = radiationSpeed(data.doseMsv) * (data.sick ? 0.8 : 1);
+  const radLevel = data.doseMsv >= RADIATION.slowMax ? "high" : data.doseMsv >= RADIATION.slowFrom ? "mid" : "ok";
+
   return (
     <div className="inv-backdrop" role="dialog" aria-label="Inventory" onPointerDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className="inv-panel">
@@ -97,38 +106,52 @@ export default function InventoryPanel({ data, onClose }: { data: InventoryData;
 
         {/* ---------- LEFT: astronaut ---------- */}
         <section className="inv-left">
-          <div className="inv-gear">
-            {GEAR.slice(0, 3).map((g) => (
-              <span key={g.name} className="inv-slot" title={g.name}>{g.icon}</span>
-            ))}
-          </div>
-          <div className="inv-avatar">
-            <span className="inv-gearcol">
-              {GEAR.slice(3, 5).map((g) => (
-                <span key={g.name} className="inv-slot" title={g.name}>{g.icon}</span>
-              ))}
-            </span>
-            <canvas ref={portrait} width={140} height={180} className="inv-portrait" aria-label="Your astronaut" />
-            <span className="inv-gearcol">
-              <span className={`inv-slot ${data.sick ? "warn" : ""}`} title={`Dosimeter: ${data.doseMsv.toFixed(1)} mSv this mission`}>
-                {GEAR[5].icon}
-              </span>
-              <span className="inv-slot dose" title="Radiation dose this mission">
-                {data.doseMsv.toFixed(1)}
-                <small>mSv</small>
-              </span>
-            </span>
-          </div>
+          <canvas ref={portrait} width={140} height={180} className="inv-portrait" aria-label="Your astronaut" />
           <div className="inv-name">{data.name.toUpperCase() || "ASTRONAUT"}</div>
-          <p className="inv-sub">
-            {data.sick ? "🤒 Resting (big radiation dose)" : "💪 Fit for duty"} · dose {data.doseMsv.toFixed(1)} / {RADIATION.careerLimit} mSv career limit
-          </p>
-          <p className="inv-head">TOOLS</p>
-          <div className="inv-tools">
-            {TOOLS.map((t) => (
-              <span key={t.name} className="inv-slot" title={t.name}>{t.icon}</span>
-            ))}
+
+          <div className={`inv-radbox ${radLevel}`} aria-label="Radiation dose">
+            <p className="inv-radhead">
+              <span>RADIATION</span>
+              <b>{data.doseMsv.toFixed(1)} mSv</b>
+            </p>
+            <div className="inv-radbar" role="meter" aria-valuenow={Math.round(data.doseMsv)} aria-valuemin={0} aria-valuemax={RADIATION.careerLimit}>
+              <i className="zone slow" style={{ left: `${radPct(RADIATION.slowFrom)}%`, width: `${radPct(RADIATION.slowMax) - radPct(RADIATION.slowFrom)}%` }} />
+              <i className="zone heavy" style={{ left: `${radPct(RADIATION.slowMax)}%`, right: 0 }} />
+              <i className="fill" style={{ width: `${radPct(data.doseMsv)}%` }} />
+            </div>
+            <p className="inv-radtxt">
+              {data.sick
+                ? `Resting after a big storm dose · moving at ${Math.round(speed * 100)}% speed`
+                : radLevel === "ok"
+                  ? `Fit for duty · full speed until ${RADIATION.slowFrom} mSv`
+                  : `High dose makes you tired · moving at ${Math.round(speed * 100)}% speed`}
+            </p>
+            <p className="inv-radtxt dim">Career limit {RADIATION.careerLimit} mSv (NASA-STD-3001)</p>
           </div>
+
+          <p className="inv-head">OUTPOST STATUS</p>
+          <dl className="inv-status">
+            <div className={data.solarPct > 3 ? "" : "off"}>
+              <dt>SOLAR</dt>
+              <dd>
+                {data.solarPct > 3 ? `${data.solarPct}%` : "OFFLINE"}
+                {data.solarEff < 0.95 && <em> · dusty {Math.round(data.solarEff * 100)}%</em>}
+              </dd>
+            </div>
+            <div>
+              <dt>OUTSIDE</dt>
+              <dd>
+                {data.outsideC} °C <em>({data.dest === "mars" ? "Curiosity REMS" : "LRO Diviner"})</em>
+              </dd>
+            </div>
+            <div className={data.commsWeak ? "off" : ""}>
+              <dt>RADIO DELAY</dt>
+              <dd>
+                {data.oneWay}
+                {data.commsWeak ? <em> · no signal</em> : data.calling >= 0 ? <em> · reply in {data.calling}s</em> : null}
+              </dd>
+            </div>
+          </dl>
         </section>
 
         {/* ---------- RIGHT: objectives / fact book / sources ---------- */}
@@ -142,6 +165,9 @@ export default function InventoryPanel({ data, onClose }: { data: InventoryData;
             </button>
             <button role="tab" aria-selected={tab === "sources"} className={tab === "sources" ? "on" : ""} onClick={() => pick("sources")}>
               🛰 DATA SOURCES
+            </button>
+            <button role="tab" aria-selected={tab === "settings"} className={tab === "settings" ? "on" : ""} onClick={() => pick("settings")}>
+              ⚙ SETTINGS
             </button>
           </div>
 
@@ -170,6 +196,17 @@ export default function InventoryPanel({ data, onClose }: { data: InventoryData;
                   <p className="inv-note">🩹 Patched (will break again soon): {data.patched.map((b) => FAULTS[b].name).join(", ")}</p>
                 )}
                 <p className="inv-note">📘 Next fact unlocks in {data.toNextFact} job{data.toNextFact === 1 ? "" : "s"}.</p>
+
+                <p className="inv-head inv-loghead">MISSION LOG</p>
+                {data.log.length ? (
+                  <ul className="inv-log">
+                    {data.log.map((l, i) => (
+                      <li key={i}>{l}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="inv-note">Nothing yet. Your jobs and events will show up here.</p>
+                )}
               </>
             )}
 
@@ -260,6 +297,24 @@ export default function InventoryPanel({ data, onClose }: { data: InventoryData;
                 </p>
               </div>
             )}
+
+            {tab === "settings" && (
+              <div className="inv-settings">
+                <p className="inv-head">SETTINGS</p>
+                <SettingsRows onExit={onExit} exitLabel={exitLabel} />
+                <p className="inv-note">↑↓ choose · ←→ change · ENTER select</p>
+
+                <p className="inv-head inv-loghead">CONTROLS</p>
+                <dl className="inv-controls">
+                  {CONTROLS.map(([key, what]) => (
+                    <div key={key}>
+                      <dt>{key}</dt>
+                      <dd>{what}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </div>
+            )}
           </div>
         </section>
 
@@ -273,7 +328,7 @@ export default function InventoryPanel({ data, onClose }: { data: InventoryData;
             </span>
           ))}
         </section>
-        <p className="inv-help">E / ESC CLOSE · 1 2 3 SWITCH TABS · CLICK A FACT TO READ IT</p>
+        <p className="inv-help">E / ESC CLOSE · 1 2 3 4 SWITCH TABS · CLICK A FACT TO READ IT</p>
       </div>
     </div>
   );

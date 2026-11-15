@@ -39,7 +39,7 @@ export function dayScript(dest: Dest, day: number): DayScript {
         lines: [
           "Space weather scientists are watching the Sun today.",
           "A solar flare is a giant burst of energy from the Sun. It can throw out fast particles that are dangerous to astronauts (that's radiation).",
-          "When the warning sounds, hide in the STORM SHELTER inside the habitat. You'll be safe, but you can't do any work while you hide.",
+          "When the warning sounds, hide in the STORM SHELTER inside the base. You'll be safe, but you can't do any work while you hide.",
         ],
         fact: { text: "Astronauts on the Moon will need storm shelters, just like this one. NASA limits the dose from one solar storm to 250 mSv.", credit: "NASA-STD-3001 (OCHMO)" },
       };
