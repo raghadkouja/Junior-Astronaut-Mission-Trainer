@@ -8,6 +8,10 @@ import type { SpaceWeather } from "@/lib/mission/nasaData";
 import { destinations } from "@/lib/turn-game/destinations";
 import { guessQuality } from "@/components/game/outpostEngine";
 import "./hud.css";
+
+import { setSettings, useSettings } from "@/lib/settings";
+import { speak } from "@/lib/narrator";
+
 import { funFacts } from "@/lib/turn-game/funFacts";
 
 type Props = {
@@ -165,6 +169,37 @@ function Waveform() {
 export default function HomeHud({ screen, dest, setDest, name, setName, onLaunch, onBegin, onSettings, weather }: Props) {
   const d = destinations[dest];
   const fact = useRotatingFact(dest);
+  const settings = useSettings();
+  const narratorOn = settings.narrator > 0;
+
+  function toggleNarrator() {
+    if (narratorOn) {
+      setSettings({ narrator: 0 });
+      window.speechSynthesis?.cancel(); // stop talking right away
+    } else {
+      setSettings({ narrator: 7 });
+      speak(`Narrator on. ${fact.text}`);
+    }
+  }
+  // Browsers block speech until the first click/key press,
+  // so greet the player the moment they interact.
+  useEffect(() => {
+    const hello = () =>
+      speak("Welcome, astronaut! Pick the Moon or Mars, then press Launch Mission.", false);
+    window.addEventListener("click", hello, { once: true });
+    window.addEventListener("keydown", hello, { once: true });
+    return () => {
+      window.removeEventListener("click", hello);
+      window.removeEventListener("keydown", hello);
+    };
+  }, []);
+
+  // Read each new fact as it rotates (only if the narrator is on)
+  useEffect(() => {
+    speak(fact.text, false);
+  }, [fact.text]);
+
+
   const clock = useEarthClock();
   const cleanName = name.trim();
   // slow computer → show a still picture instead of the video
@@ -245,6 +280,12 @@ export default function HomeHud({ screen, dest, setDest, name, setName, onLaunch
           ) : (
             <video
               key={dest}
+              ref={(v) => {
+                if (v) {
+                  v.muted = true;
+                  v.play().catch(() => {}); // if the browser still says no, the poster stays
+                }
+              }}
               className="hud-video show"
               src={d.video}
               poster={d.poster}
@@ -376,6 +417,15 @@ export default function HomeHud({ screen, dest, setDest, name, setName, onLaunch
         ) : (
           <p className="deck-hint">Type your name in the window above ↑</p>
         )}
+
+        <button
+          className={`dest-key ${narratorOn ? "active" : ""}`}
+          onClick={toggleNarrator}
+          aria-pressed={narratorOn}
+          title="Read the game out loud"
+        >
+          {narratorOn ? "🔊 NARRATOR: ON" : "🔈 NARRATOR: OFF"}
+        </button>
 
         <p className="hud-credit">Video &amp; logo: NASA</p>
       </footer>

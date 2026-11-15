@@ -8,7 +8,7 @@ import type { Dest, PartId, StationId, SystemId, TaskId } from "@/lib/mission/co
 import type { Apod, SpaceWeather } from "@/lib/mission/nasaData";
 import {
   choose, clockLabel, cToF, dayPhase, dismissCard, isBroken, newSim, objectives, outsideTempC,
-  repair, roverFact, snapshot, wakeUp, collectRock, solarOutput, startTask, stationAction, sunLevel, tasksToNextFact, tick,
+  repair, roverFact, snapshot, wakeUp, collectRock, narratorHint, solarOutput, startTask, stationAction, sunLevel, tasksToNextFact, tick,
 } from "@/lib/mission/sim";
 import type { Card, Diff, RepairMode, Sim, Toast } from "@/lib/mission/sim";
 import { createOutpost, guessQuality } from "./outpostEngine";
@@ -20,6 +20,7 @@ import InventoryPanel from "@/components/menus/InventoryPanel";
 import type { Tab as InvTab } from "@/components/menus/InventoryPanel";
 import { play } from "@/lib/sfx";
 import "./game.css";
+import { speak } from "@/lib/narrator";
 
 // Hotbar: keys 1–8 walk to that station and use it
 const SLOTS: { id: StationId; key: string; icon: string; label: string; task: TaskId }[] = [
@@ -49,6 +50,7 @@ type Hud = ReturnType<typeof readHud>;
 function readHud(s: Sim) {
   return {
     day: s.day,
+    hint: narratorHint(s),
     clock: clockLabel(s),
     phase: dayPhase(s),
     sun: sunLevel(s),
@@ -179,6 +181,7 @@ export default function GameScreen({ dest, name, weather, apod, paused = false, 
       const now = performance.now();
       setToasts((old) => [...old.filter((t) => now - t.born < 5000), ...fresh.map((t) => ({ ...t, born: now }))].slice(-4));
       const kinds = fresh.map((t) => t.kind);
+      speak(fresh[fresh.length - 1].text);
       if (fresh.some((t) => t.text.startsWith("⚠ BREAKDOWN") || t.text.includes("failed!"))) play("break");
       else if (kinds.includes("fact")) play("fact");
       else if (kinds.includes("bad")) play("alarm");
@@ -187,6 +190,7 @@ export default function GameScreen({ dest, name, weather, apod, paused = false, 
     // pop-up cards
     const top = s.cards[0] ?? null;
     if (top !== live.current.card) {
+      if (top) speak([top.title, ...top.lines].join(". "));
       if (top?.kind === "storm") play("alarm");
       if (top?.kind === "houston") play("radio");
       setCard(top);
@@ -287,6 +291,7 @@ export default function GameScreen({ dest, name, weather, apod, paused = false, 
   const showEnd = (hud.status === "lost" && simDone) || partyDone;
   const anyOverlay = paused || menu !== "none" || !!card || !!repairing || (hud.status !== "playing" && showEnd);
   useEffect(() => engine.current?.setPaused(anyOverlay), [anyOverlay]);
+  useEffect(() => { speak(hud.hint, false); }, [hud.hint]);
 
   // win / lose
   useEffect(() => {
