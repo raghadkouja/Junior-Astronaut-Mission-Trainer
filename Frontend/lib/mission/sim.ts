@@ -1,11 +1,3 @@
-// =====================================================================
-// lib/mission/sim.ts  (NEW: replaces lib/turn-game/gameLogic.ts)
-// The rules of the mission. Runs on a REAL-TIME clock: day turns into
-// night as seconds pass, not as turns. No React in this file.
-//
-// For speed, tick() changes the state object in place (it runs 30–60
-// times a second). The screen copies what it needs a few times a second.
-// =====================================================================
 
 import {
   BREAKDOWN, COMMS, FACTS_EVERY, FAULTS, MISSION, OUTSIDE_TEMP, PARTS, RADIATION, RATES, RATS, ROCKS, SLEEP, STAMINA, START, TASKS, TEMP,

@@ -1,7 +1,4 @@
-// lib/turn-game/destinations.ts  (UPDATED)
-// Destination info shown on the homepage.
-// SPEED: videos were re-encoded to 1280x720 at 30 fps (Mars was 4K and 63 MB,
-// now 2.4 MB). Each one has a still "poster" picture for slow computers.
+
 import type { Dest } from "@/lib/mission/config";
 
 export const destinations = {
@@ -14,7 +11,7 @@ export const destinations = {
       ["GRAVITY", "0.17 g"],
       ["REAL DAY", "29.5 Earth days"],
       ["SUNLIGHT", "14 days on, 14 off"],
-      ["BIG RISK", "Freezing nights"],
+      ["HIGH RISK", "Freezing nights"],
     ],
     gauges: [["POWER", 70], ["RADIATION", 75], ["COLD", 85]],
     delay: "≈1.3 sec",
@@ -29,7 +26,7 @@ export const destinations = {
       ["GRAVITY", "0.38 g"],
       ["DAY LENGTH", "24 h 39 min"],
       ["SUNLIGHT", "~43% of Earth"],
-      ["BIG RISK", "Dust storms"],
+      ["HIGH RISK", "Dust storms"],
     ],
     gauges: [["POWER", 85], ["RADIATION", 65], ["COLD", 75]],
     delay: "3–22 min",
