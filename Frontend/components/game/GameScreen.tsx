@@ -8,7 +8,7 @@ import type { Dest, PartId, StationId, SystemId, TaskId } from "@/lib/mission/co
 import type { Apod, SpaceWeather } from "@/lib/mission/nasaData";
 import {
   choose, clockLabel, cToF, dayPhase, dismissCard, isBroken, newSim, objectives, outsideTempC,
-  repair, roverFact, snapshot, wakeUp, collectRock, solarOutput, startTask, stationAction, sunLevel, tasksToNextFact, tick,
+  repair, roverFact, snapshot, wakeUp, collectRock, narratorHint, solarOutput, startTask, stationAction, sunLevel, tasksToNextFact, tick,
 } from "@/lib/mission/sim";
 import type { Card, Diff, RepairMode, Sim, Toast } from "@/lib/mission/sim";
 import { createOutpost, guessQuality } from "./outpostEngine";
@@ -50,6 +50,7 @@ type Hud = ReturnType<typeof readHud>;
 function readHud(s: Sim) {
   return {
     day: s.day,
+    hint: narratorHint(s),
     clock: clockLabel(s),
     phase: dayPhase(s),
     sun: sunLevel(s),

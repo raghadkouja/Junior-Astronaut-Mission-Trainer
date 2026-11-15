@@ -68,7 +68,7 @@ export function SettingsRows({ onExit, exitLabel = "EXIT" }: { onExit?: () => vo
       {rows.map((row, i) => {
         const on = i === sel;
         const label = row === "exit" ? exitLabel : row.toUpperCase();
-        const slider = row === "music" || row === "sounds";
+        const slider = row === "music" || row === "sounds" || row === "narrator";
         return (
           <li key={row} className={`sm-row ${on ? "sel" : ""}`} onPointerEnter={() => setSel(i)}>
             <span className="sm-cursor">{on ? "▶" : ""}</span>
@@ -77,7 +77,7 @@ export function SettingsRows({ onExit, exitLabel = "EXIT" }: { onExit?: () => vo
                 <span className="sm-label">{label}</span>
                 <span className="sm-dots" />
                 <button className="sm-arrow" aria-label={`Lower ${label}`} onClick={() => change(row, -1)}>◀</button>
-                {bar(row === "music" ? s.music : s.sounds)}
+                {bar(row === "music" ? s.music : row === "sounds" ? s.sounds : s.narrator)}
                 <button className="sm-arrow" aria-label={`Raise ${label}`} onClick={() => change(row, +1)}>▶</button>
               </>
             ) : (
@@ -116,31 +116,6 @@ export default function SettingsMenu({
     <div className="sm-backdrop" role="dialog" aria-label="Settings" onPointerDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className="sm-panel">
         <p className="sm-title">SETTINGS</p>
-        <ul className="sm-list">
-          {rows.map((row, i) => {
-            const on = i === sel;
-            const label = row === "exit" ? exitLabel : row.toUpperCase();
-            const slider = row === "music" || row === "sounds" || row === "narrator";
-            return (
-              <li key={row} className={`sm-row ${on ? "sel" : ""}`} onPointerEnter={() => setSel(i)}>
-                <span className="sm-cursor">{on ? "▶" : ""}</span>
-                {slider ? (
-                  <>
-                    <span className="sm-label">{label}</span>
-                    <span className="sm-dots" />
-                    <button className="sm-arrow" aria-label={`Lower ${label}`} onClick={() => change(row, -1)}>◀</button>
-                    {bar(row === "music" ? s.music : row === "sounds" ? s.sounds : s.narrator)}
-                    <button className="sm-arrow" aria-label={`Raise ${label}`} onClick={() => change(row, +1)}>▶</button>
-                  </>
-                ) : (
-                  <button className="sm-label sm-action" onClick={() => activate(row)}>
-                    {label}
-                  </button>
-                )}
-              </li>
-            );
-          })}
-        </ul>
         <SettingsRows onExit={onExit} exitLabel={exitLabel} />
         <p className="sm-help">↑↓ CHOOSE · ←→ CHANGE · ENTER SELECT · ESC RESUME</p>
       </div>
