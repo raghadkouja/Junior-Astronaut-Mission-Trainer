@@ -492,6 +492,8 @@ export function createOutpost(canvas: HTMLCanvasElement, opts: OutpostOptions): 
   const rover = {
     x: DOCK_SPOT.x, y: DOCK_SPOT.y, face: 1, state: "charge" as RoverState, timer: 12,
     route: [] as { x: number; y: number }[], wheel: 0, moving: false,
+    cargo: null as "rock" | null, // carrying a space rock to give you
+    goingFor: null as { x: number; y: number; got: boolean } | null, // the rock it's driving to
   };
   let pendingRover = false; // walking over to the rover after clicking it
   let rats: RatInfo = { health: 100, shielded: false, fed: false };
@@ -1100,12 +1102,28 @@ export function createOutpost(canvas: HTMLCanvasElement, opts: OutpostOptions): 
     }
     return false;
   }
+  // Half the time the rover heads for a space rock to bring back to you; otherwise it finds a fun fact
+  function pickRoverTrip() {
+    rover.goingFor = null;
+    if (!rover.cargo) {
+      const free = rocks.filter((r) => !r.got);
+      if (free.length && Math.random() < 0.5) {
+        const r = free[(Math.random() * free.length) | 0];
+        if (roverGo(r.x, r.y)) {
+          rover.goingFor = r;
+          return true;
+        }
+      }
+    }
+    return pickRoverSpot();
+  }
+
   function updateRover(dt: number) {
     rover.timer -= dt;
     rover.moving = false;
     if (rover.state === "charge") {
       if (rover.timer <= 0) {
-        if (pickRoverSpot()) rover.state = "drive";
+        if (pickRoverTrip()) rover.state = "drive";
         else rover.timer = 5;
       }
     } else if (rover.state === "found" || rover.state === "happy") {
@@ -1136,6 +1154,14 @@ export function createOutpost(canvas: HTMLCanvasElement, opts: OutpostOptions): 
       if (rover.moving) rover.wheel += dt * 10;
       if (!rover.route.length) {
         if (rover.state === "drive") {
+          // reached a space rock? scoop it up (unless you grabbed it first)
+          if (rover.goingFor && !rover.goingFor.got) {
+            rover.goingFor.got = true;
+            rover.cargo = "rock";
+            for (let j = 0; j < 8; j++)
+              parts.push({ x: rover.x, y: rover.y - 2, vx: (Math.random() - 0.5) * 24, vy: -8 - Math.random() * 12, life: 0, max: 0.5, c: PAL[dest].speck[1], s: 1 });
+          }
+          rover.goingFor = null;
           rover.state = "found";
           rover.timer = 25;
         } else {
@@ -1154,7 +1180,14 @@ export function createOutpost(canvas: HTMLCanvasElement, opts: OutpostOptions): 
     rover.state = "happy";
     rover.timer = 1.2;
     floats.push({ x: rover.x, y: rover.y - 12, text: "BEEP BOOP!", color: AMBER, age: 0 });
-    opts.onRover?.();
+    if (rover.cargo === "rock") {
+      // the rover hands you the space rock it found
+      rover.cargo = null;
+      rocksGot++;
+      floats.push({ x: rover.x, y: rover.y - 20, text: `THE ROVER FOUND A SPACE ROCK! (${rocksGot}/${rocks.length})`, color: "#ffd25a", age: -0.45 });
+      const reward = opts.onRock?.(rocksGot, rocks.length);
+      if (reward) floats.push({ x: rover.x, y: rover.y - 20, text: reward, color: "#7dffb0", age: -0.9 });
+    } else opts.onRover?.(); // a fun fact
   }
 
   // The astronaut sprite turned on its side, lying in bed (head on the pillow)
@@ -1463,6 +1496,13 @@ export function createOutpost(canvas: HTMLCanvasElement, opts: OutpostOptions): 
       const fill = Math.round(8 * clamp(1 - rover.timer / 22, 0, 1)); // battery filling up
       px(ctx, x - 5, y - 13, 10, 3, INK);
       px(ctx, x - 4, y - 12, fill, 1, "#7dffb0");
+    }
+    if (rover.cargo === "rock") {
+      // the space rock riding on its back
+      const rx = f > 0 ? x - 6 : x;
+      px(ctx, rx, y - 13, 6, 4, INK);
+      px(ctx, rx + 1, y - 12, 4, 2, dest === "mars" ? "#c9773f" : "#9aa0ae");
+      px(ctx, rx + 2, y - 13, 2, 1, "#e3e7ef");
     }
   }
 
