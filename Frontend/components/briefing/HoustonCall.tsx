@@ -25,10 +25,12 @@ function briefing(name: string, dest: Dest): string[] {
       : "Radio signals take anywhere from 3 to 22 minutes to reach Mars, so on a real mission you would make many of these decisions on your own.";
   return [
     `${name}, this is Houston. Do you copy? Over.`,
-    `Welcome to your ${place} outpost, Commander ${name}. You have ${c.totalTurns} turns to keep your crew alive.`,
+    dest === "moon"
+      ? `Welcome to Nova Outpost, Commander ${name}. A big solar storm damaged the base, and the rest of the crew was needed back on Earth, so you stayed to keep it running. The rescue ship lands in 5 days.`
+      : `Welcome to your ${place} outpost, Commander ${name}. You have ${c.days} sols to keep the base running.`,
     delay,
     "Rule number one: when the sun goes down, your solar panels make no power. Charge your batteries while the sun is up.",
-    "Watch your battery, oxygen, and food. You can run the greenhouse, recycle the air, or conserve power. Every choice is a trade-off.",
+    "Watch your battery, oxygen, food, and cabin heat. You can run the greenhouse, recycle the air, turn up the heater, or conserve power. Every choice is a trade-off.",
     `Houston is counting on you, Commander ${name}. Good luck. Over.`,
   ];
 }

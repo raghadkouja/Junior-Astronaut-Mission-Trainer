@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { config, startState } from "@/lib/turn-game/gameLogic";
+import { config, pace, startState } from "@/lib/turn-game/gameLogic";
 import type { Dest } from "@/lib/turn-game/gameLogic";
 import { destinations } from "@/lib/turn-game/destinations";
 import "./hud.css";
@@ -205,7 +205,7 @@ export default function HomeHud({ screen, dest, setDest, name, setName, onLaunch
             </li>
             <li>
               <span>SOLAR PANELS</span>
-              <b>+{cfg.solar} power by day</b>
+              <b>+{Math.round(cfg.solar * pace(dest))} power per daytime turn</b>
             </li>
             <li>
               <span>AT NIGHT</span>

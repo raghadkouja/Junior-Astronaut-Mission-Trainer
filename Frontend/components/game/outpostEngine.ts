@@ -6,7 +6,7 @@
 // up by `zoom` with smoothing off so pixels stay crisp.
 // =========================================================
 
-export type StationId = "greenhouse" | "conserve" | "recycle";
+export type StationId = "greenhouse" | "conserve" | "recycle" | "heater" | "clean" | "comms";
 export type WorldDest = "moon" | "mars";
 export type FloatText = { text: string; color: string };
 export type OutpostStatus = { power: number; oxygen: number; food: number };
@@ -31,7 +31,10 @@ export type Outpost = {
   setNightDarkness(v: number): void;
   setPaused(p: boolean): void;
   goUse(id: StationId): void; // walk to a station, then use it
+  goTo(id: StationId, hideSeconds?: number): void; // walk to a station WITHOUT using it (optionally go inside)
+  harvest(items: FloatText[]): void; // walk into the greenhouse, pick plants, walk out, then show the results
   feedback(id: StationId, items: FloatText[]): void; // floating "+10 FOOD" text
+  floatText(items: FloatText[]): void; // floating text without a station burst
   destroy(): void;
 };
 
@@ -72,14 +75,29 @@ const STATIONS: Record<StationId, { rect: Rect; spot: { x: number; y: number }; 
     label: "BATTERY BANK",
     verb: "CONSERVE POWER",
   },
+  heater: {
+    rect: HAB,
+    spot: { x: HAB.x + HAB.w / 2, y: HAB.y + HAB.h + 14 },
+    label: "HABITAT · HEATER",
+    verb: "TURN UP THE HEATER",
+  },
+  clean: {
+    rect: SOLAR,
+    spot: { x: SOLAR.x + SOLAR.w / 2, y: SOLAR.y + SOLAR.h + 14 },
+    label: "SOLAR ARRAY",
+    verb: "CLEAN THE PANELS",
+  },
+  comms: {
+    rect: DISH,
+    spot: { x: DISH.x + DISH.w / 2, y: DISH.y - 12 },
+    label: "COMMS · EARTH",
+    verb: "CALL HOUSTON",
+  },
 };
 const STATION_IDS = Object.keys(STATIONS) as StationId[];
 
-const DECOR_LABELS: { rect: Rect; label: string }[] = [
-  { rect: HAB, label: "HABITAT" },
-  { rect: SOLAR, label: "SOLAR ARRAY" },
-  { rect: DISH, label: "COMMS · EARTH" },
-];
+// The habitat, solar array and dish are stations now, so no extra labels.
+const DECOR_LABELS: { rect: Rect; label: string }[] = [];
 
 // ---------- Colours ----------
 const PAL = {
@@ -423,6 +441,12 @@ export function createOutpost(canvas: HTMLCanvasElement, opts: OutpostOptions): 
   let lastUse = -1;
   let font = "ui-monospace, Menlo, Consolas, monospace";
   let pendingUse: StationId | null = null;
+  let goal: { id: StationId; hide: number } | null = null; // walk here without using it
+  let hiddenFor = 0; // seconds left inside a building (e.g. the storm shelter)
+  let hiddenAt: StationId | null = null;
+  // Greenhouse harvest scene: the astronaut follows these points inside
+  let scene: { pts: { x: number; y: number; pause: number }[]; i: number; wait: number; items: FloatText[] } | null = null;
+  const pickedUntil = new Map<number, number>(); // plant index -> time it has grown back
   let stuckFor = 0;
   let near: StationId | null = null;
   let cssW = 0;
@@ -431,7 +455,7 @@ export function createOutpost(canvas: HTMLCanvasElement, opts: OutpostOptions): 
   let cam = { x: 0, y: 0 };
   let t = 0;
   const keys = new Set<string>();
-  const pulse: Record<StationId, number> = { greenhouse: 0, conserve: 0, recycle: 0 };
+  const pulse: Record<StationId, number> = { greenhouse: 0, conserve: 0, recycle: 0, heater: 0, clean: 0, comms: 0 };
   const floats: { x: number; y: number; text: string; color: string; age: number; delay: number }[] = [];
   const parts: { x: number; y: number; vx: number; vy: number; life: number; max: number; c: string; s: number }[] = [];
 
@@ -484,7 +508,7 @@ export function createOutpost(canvas: HTMLCanvasElement, opts: OutpostOptions): 
     return { x: (clientX - r.left) / zoom + cam.x, y: (clientY - r.top) / zoom + cam.y };
   };
   const onPointerDown = (e: PointerEvent) => {
-    if (paused) return;
+    if (paused || hiddenFor > 0 || scene) return;
     const w = toWorld(e.clientX, e.clientY);
     const hit = STATION_IDS.find((id) => inside(w.x, w.y, STATIONS[id].rect, 6));
     if (hit) {
@@ -512,11 +536,117 @@ export function createOutpost(canvas: HTMLCanvasElement, opts: OutpostOptions): 
     target = null;
     route = [];
     pendingUse = null;
+    if (hiddenFor > 0 || scene) return; // still inside a building
     if (t - lastUse < 0.35) return; // ignore accidental double taps
     lastUse = t;
     faceToward(STATIONS[id].rect);
     opts.onUse?.(id);
   }
+  // Walk to a station without using it; go inside if asked
+  function startGoal() {
+    if (!goal || scene) return; // wait until the harvest scene is over
+    const sp = STATIONS[goal.id].spot;
+    walkTo(sp.x, sp.y);
+    if (!target) arrive();
+  }
+  function arrive() {
+    if (!goal) return;
+    faceToward(STATIONS[goal.id].rect);
+    if (goal.hide > 0) {
+      hiddenFor = goal.hide;
+      hiddenAt = goal.id;
+      floats.push({ x: player.x, y: player.y, text: "SAFE INSIDE", color: "#7dffb0", age: 0, delay: 0 });
+    }
+    goal = null;
+  }
+  // ----- greenhouse harvest scene -----
+  function startHarvest(items: FloatText[]) {
+    const { x, y, w, h } = GREEN;
+    const door = { x: x + w - 3, y: y + h / 2 + 4 };
+    const aisle = y + 72; // between the 3rd and 4th rows of plants
+    target = null;
+    route = [];
+    pendingUse = null;
+    scene = {
+      pts: [
+        { x: door.x, y: door.y, pause: 0 },
+        { x: x + w - 16, y: aisle, pause: 0 },
+        { x: x + w - 62, y: aisle, pause: 0.7 }, // pick
+        { x: x + 46, y: aisle, pause: 0.7 }, // pick
+        { x: x + w - 16, y: aisle, pause: 0 },
+        { x: door.x, y: door.y, pause: 0 },
+        { x: STATIONS.greenhouse.spot.x, y: STATIONS.greenhouse.spot.y, pause: 0 },
+      ],
+      i: 0,
+      wait: 0,
+      items,
+    };
+  }
+  function pickNearby() {
+    let i = 0;
+    for (let r = 0; r < 4; r++) {
+      for (let c = 0; c < 7; c++, i++) {
+        const cx = GREEN.x + 18 + c * 20;
+        const cy = GREEN.y + 14 + r * 24;
+        if (Math.abs(cx - player.x) < 24 && Math.abs(cy - player.y) < 20) pickedUntil.set(i, t + 6);
+      }
+    }
+  }
+  function leafPop() {
+    parts.push({
+      x: player.x + (Math.random() - 0.5) * 18,
+      y: player.y - 6 + (Math.random() - 0.5) * 10,
+      vx: (Math.random() - 0.5) * 24,
+      vy: -22 - Math.random() * 22,
+      life: 0,
+      max: 0.5 + Math.random() * 0.4,
+      c: Math.random() < 0.3 ? "#ff6a5a" : "#7dffb0",
+      s: 2,
+    });
+  }
+  function stepScene(dt: number) {
+    const sc = scene!;
+    if (sc.wait > 0) {
+      sc.wait -= dt;
+      player.moving = false;
+      player.facing = "up";
+      if (Math.random() < dt * 14) leafPop();
+      return;
+    }
+    if (sc.i >= sc.pts.length) {
+      // walked back out: show what the harvest did
+      scene = null;
+      player.facing = "down";
+      pulse.greenhouse = 1;
+      burst("greenhouse");
+      sc.items.forEach((it, k) =>
+        floats.push({ x: player.x, y: player.y, text: it.text, color: it.color, age: -k * 0.45, delay: 0 }),
+      );
+      if (goal) startGoal();
+      return;
+    }
+    const p = sc.pts[sc.i];
+    const dx = p.x - player.x;
+    const dy = p.y - player.y;
+    const d = Math.hypot(dx, dy);
+    const sp = 80 * dt;
+    if (d <= sp) {
+      player.x = p.x;
+      player.y = p.y;
+      sc.i++;
+      if (p.pause > 0) {
+        sc.wait = p.pause;
+        pickNearby();
+      }
+      return;
+    }
+    player.x += (dx / d) * sp;
+    player.y += (dy / d) * sp;
+    player.moving = true;
+    player.walk += dt * 9;
+    player.facing = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "right" : "left") : dy > 0 ? "down" : "up";
+  }
+
   function faceToward(r: Rect) {
     const dx = r.x + r.w / 2 - player.x;
     const dy = r.y + r.h / 2 - player.y;
@@ -526,17 +656,26 @@ export function createOutpost(canvas: HTMLCanvasElement, opts: OutpostOptions): 
   // ----- movement with collision -----
 
   function step(dt: number) {
+    if (scene) {
+      stepScene(dt);
+      return;
+    }
     const k = keys;
     let dx = (k.has("arrowright") || k.has("d") ? 1 : 0) - (k.has("arrowleft") || k.has("a") ? 1 : 0);
     let dy = (k.has("arrowdown") || k.has("s") ? 1 : 0) - (k.has("arrowup") || k.has("w") ? 1 : 0);
     const speed = 64;
 
-    if (paused) dx = dy = 0;
+    if (hiddenFor > 0) {
+      hiddenFor = Math.max(0, hiddenFor - dt);
+      if (hiddenFor === 0) hiddenAt = null;
+    }
+    if (paused || hiddenFor > 0) dx = dy = 0;
     if (dx || dy) {
       target = null;
       route = [];
       pendingUse = null;
-    } else if (target && !paused) {
+      goal = null;
+    } else if (target && !paused && hiddenFor <= 0) {
       let tx = target.x - player.x;
       let ty = target.y - player.y;
       let d = Math.hypot(tx, ty);
@@ -549,6 +688,7 @@ export function createOutpost(canvas: HTMLCanvasElement, opts: OutpostOptions): 
       if (d < 1.5) {
         target = null;
         if (pendingUse) use(pendingUse);
+        else if (goal) arrive();
       } else {
         dx = tx / d;
         dy = ty / d;
@@ -572,6 +712,7 @@ export function createOutpost(canvas: HTMLCanvasElement, opts: OutpostOptions): 
         // Close enough to the station? Use it anyway.
         if (pendingUse && inside(player.x, player.y - 3, STATIONS[pendingUse].rect, 26)) use(pendingUse);
         pendingUse = null;
+        if (goal) arrive();
         stuckFor = 0;
       }
     }
@@ -668,6 +809,7 @@ export function createOutpost(canvas: HTMLCanvasElement, opts: OutpostOptions): 
 
   function drawGreenhouse() {
     const { x, y, w, h } = GREEN;
+    let plant = 0;
     const p = PAL[dest];
     shadow(GREEN);
     px(ctx, x, y, w, h, INK);
@@ -688,6 +830,13 @@ export function createOutpost(canvas: HTMLCanvasElement, opts: OutpostOptions): 
         const cx = x + 18 + c * 20;
         const cy = y + 14 + r * 24;
         const sway = Math.sin(t * 2 + i++) > 0.6 ? 1 : 0;
+        const picked = (pickedUntil.get(plant++) ?? 0) > t;
+        if (picked) {
+          // just harvested: a little sprout that will grow back
+          px(ctx, cx - 1, cy + 2, 2, 3, leafD);
+          px(ctx, cx - 2, cy + 1, 4, 1, leaf);
+          continue;
+        }
         px(ctx, cx - 1, cy + 2, 2, 3, leafD);
         if (stage >= 1 || stage === 0) {
           px(ctx, cx - 3 + sway, cy, 3, 2, leaf);
@@ -706,6 +855,8 @@ export function createOutpost(canvas: HTMLCanvasElement, opts: OutpostOptions): 
         px(ctx, cx - 3 + sway, cy, 1, 1, leafH);
       }
     }
+    // the astronaut working inside (drawn under the glass)
+    if (scene) drawAstronaut();
     // glass roof shine
     ctx.fillStyle = "rgba(160,240,255,0.10)";
     ctx.fillRect(x + 5, y + 5, w - 10, h - 10);
@@ -799,6 +950,10 @@ export function createOutpost(canvas: HTMLCanvasElement, opts: OutpostOptions): 
 
   // ----- drawing: astronaut -----
   function drawPlayer() {
+    if (hiddenFor > 0 || scene) return; // inside a building
+    drawAstronaut();
+  }
+  function drawAstronaut() {
     const p = PAL[dest];
     const colors: Record<string, string> = {
       K: INK,
@@ -879,16 +1034,27 @@ export function createOutpost(canvas: HTMLCanvasElement, opts: OutpostOptions): 
       for (const d of DECOR_LABELS) lab(d.rect, d.label, false);
       for (const id of STATION_IDS) lab(STATIONS[id].rect, STATIONS[id].label, near === id);
     }
-    // name tag over the astronaut
-    const ps = toScreen(player.x, player.y - 17);
-    tag(ps.x, ps.y - 4, name.toUpperCase() || "ASTRONAUT", {
-      bg: "rgba(2,6,13,0.85)",
-      fg: "#ffffff",
-      border: "rgba(59,232,255,0.6)",
-      size: 10,
-    });
+    // name tag over the astronaut (or "sheltering" over the building they're in)
+    if (hiddenFor > 0 && hiddenAt) {
+      const r = STATIONS[hiddenAt].rect;
+      const s = toScreen(r.x + r.w / 2, r.y);
+      tag(s.x, s.y - 36, `${name.toUpperCase() || "ASTRONAUT"} IS SHELTERING INSIDE…`, {
+        bg: "rgba(2,6,13,0.9)",
+        fg: "#7dffb0",
+        border: "rgba(125,255,176,0.7)",
+        size: 11,
+      });
+    } else {
+      const ps = toScreen(player.x, player.y - 17);
+      tag(ps.x, ps.y - 4, name.toUpperCase() || "ASTRONAUT", {
+        bg: "rgba(2,6,13,0.85)",
+        fg: "#ffffff",
+        border: "rgba(59,232,255,0.6)",
+        size: 10,
+      });
+    }
     // use prompt
-    if (near && !paused) {
+    if (near && !paused && hiddenFor <= 0 && !scene) {
       const r = STATIONS[near].rect;
       const s = toScreen(r.x + r.w / 2, r.y);
       const bounce = Math.sin(t * 5) * 2;
@@ -1074,13 +1240,28 @@ export function createOutpost(canvas: HTMLCanvasElement, opts: OutpostOptions): 
         target = null;
         route = [];
         pendingUse = null;
+      } else if (goal && !target && !scene) {
+        startGoal(); // a walk that was asked for while a card was open
       }
     },
+    goTo(id, hideSeconds = 0) {
+      pendingUse = null;
+      goal = { id, hide: hideSeconds };
+      if (!paused) startGoal();
+    },
+    harvest(items) {
+      startHarvest(items);
+    },
     goUse(id) {
-      if (paused) return;
+      if (paused || hiddenFor > 0 || scene) return;
       if (near === id) return use(id);
       walkTo(STATIONS[id].spot.x, STATIONS[id].spot.y);
       pendingUse = target ? id : null;
+    },
+    floatText(items) {
+      items.forEach((it, i) =>
+        floats.push({ x: player.x, y: player.y, text: it.text, color: it.color, age: -i * 0.45, delay: 0 }),
+      );
     },
     feedback(id, items) {
       pulse[id] = 1;

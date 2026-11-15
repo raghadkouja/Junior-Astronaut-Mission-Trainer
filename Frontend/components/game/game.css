@@ -356,6 +356,100 @@
 }
 .og-launch.ghost { background: rgba(59, 232, 255, 0.12); color: #9eeefc; box-shadow: inset 0 0 0 1.5px var(--c-dim); }
 
+/* ---------- Cabin temperature meter ---------- */
+.og-meter.temp { --mcol: #ff8f6b; }
+.og-meter.temp.low { --mcol: #8fb8ff; }
+.og-msub { margin-top: -0.25em; font-size: 0.5em; color: #9eeefc; }
+.og-slot.blocked { opacity: 0.55; }
+.og-rad { color: #ffb3ad; animation: og-blink 1.2s steps(1) infinite; }
+
+.og-left {
+  display: block;
+  margin-top: 0.2em;
+  font-size: 0.62em;
+  letter-spacing: 0.16em;
+  color: var(--amber);
+}
+
+/* ---------- Story event card (EventCard.tsx) ---------- */
+.og-event {
+  position: absolute;
+  inset: 0;
+  z-index: 9;
+  display: grid;
+  place-items: center;
+  padding: 1em;
+  background: rgba(2, 6, 13, 0.6);
+}
+.og-eventcard {
+  --cut: 22px;
+  width: min(34em, 94vw);
+  max-height: 88vh;
+  overflow-y: auto;
+  padding: 1.3em 1.5em 1.4em;
+}
+.og-eventcard h2 {
+  margin: 0.25em 0 0.5em;
+  font-family: var(--font-geist-sans), "Segoe UI", sans-serif;
+  font-size: 1.45em;
+  font-weight: 800;
+  color: #fff;
+}
+.og-eventtext {
+  margin: 0;
+  font-family: var(--font-geist-sans), "Segoe UI", sans-serif;
+  line-height: 1.55;
+  color: #e3f7ff;
+}
+.og-eventrad {
+  margin: 0.8em 0 0;
+  padding: 0.45em 0.7em;
+  border: 1px solid var(--hot);
+  font-size: 0.8em;
+  color: #ffb3ad;
+}
+.og-fact {
+  margin: 0.9em 0 0;
+  padding: 0.7em 0.8em;
+  border-left: 3px solid var(--amber);
+  background: rgba(255, 179, 71, 0.08);
+  font-family: var(--font-geist-sans), "Segoe UI", sans-serif;
+  font-size: 0.86em;
+  line-height: 1.5;
+  color: #ffe6c4;
+}
+.og-fact b { margin-right: 0.3em; font-size: 0.8em; letter-spacing: 0.12em; color: var(--amber); }
+.og-source { display: block; margin-top: 0.4em; font-size: 0.82em; color: #c9a77a; }
+.og-source a { color: inherit; }
+.og-choices { display: grid; gap: 0.55em; margin-top: 1.1em; }
+.og-choice {
+  --cut: 10px;
+  position: relative;
+  display: grid;
+  gap: 0.35em;
+  padding: 0.75em 1em 0.7em 2.4em;
+  border: 0;
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+  background: rgba(59, 232, 255, 0.08);
+  box-shadow: inset 0 0 0 1.5px var(--c-dim);
+  color: #fff;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.og-choice:hover,
+.og-choice:focus-visible {
+  outline: none;
+  background: rgba(255, 179, 71, 0.16);
+  box-shadow: inset 0 0 0 2px var(--amber);
+}
+.og-choice .og-key { top: 0.95em; left: 0.9em; font-size: 0.7em; }
+.og-choicelbl { font-family: var(--font-geist-sans), "Segoe UI", sans-serif; font-weight: 700; }
+.og-choice .og-cost { flex-wrap: wrap; font-size: 0.62em; }
+@media (max-width: 900px) {
+  .og-choice .og-cost { display: flex; }
+}
+
 @keyframes og-blink { 50% { border-color: transparent; } }
 
 /* ---------- Tablets / phones ---------- */

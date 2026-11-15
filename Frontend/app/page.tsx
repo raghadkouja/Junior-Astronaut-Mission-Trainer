@@ -17,11 +17,11 @@ export default function Home() {
 
   function begin() {
     if (!cleanName) return;
-    setGame(startState());
+    setGame(startState(dest));
     setScreen("call");
   }
   function retry() {
-    setGame(startState());
+    setGame(startState(dest));
   }
   function backToTitle() {
     setGame(startState());
