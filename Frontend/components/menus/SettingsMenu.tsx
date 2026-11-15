@@ -116,7 +116,6 @@ export default function SettingsMenu({
     <div className="sm-backdrop" role="dialog" aria-label="Settings" onPointerDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className="sm-panel">
         <p className="sm-title">SETTINGS</p>
-<<<<<<< HEAD
         <ul className="sm-list">
           {rows.map((row, i) => {
             const on = i === sel;
@@ -142,9 +141,7 @@ export default function SettingsMenu({
             );
           })}
         </ul>
-=======
         <SettingsRows onExit={onExit} exitLabel={exitLabel} />
->>>>>>> 3c88e874a470225bae72a7606ab04ac5ec39dc8d
         <p className="sm-help">↑↓ CHOOSE · ←→ CHANGE · ENTER SELECT · ESC RESUME</p>
       </div>
     </div>
