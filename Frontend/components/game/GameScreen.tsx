@@ -1,39 +1,28 @@
 "use client";
 
-/**
- * GameScreen.tsx  (REWRITTEN)
- * FILE LOCATION: Frontend/components/game/GameScreen.tsx
- *
- * Runs one mission: the canvas world (outpostEngine.ts) + the mission
- * rules (lib/mission/sim.ts) + the HUD, menus and pop-ups.
- *
- * Speed notes (smooth on slow computers):
- *   • the mission clock runs inside the engine's animation frame,
- *     NOT through React state
- *   • React only re-draws the HUD 5 times a second
- *   • the engine drops to "low quality" by itself if frames are slow
- */
+
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { MISSION, RADIATION, TASKS, TEMP, radiationSpeed } from "@/lib/mission/config";
+import { MISSION, RADIATION, RATS, ROCKS, TASKS, TEMP, radiationSpeed } from "@/lib/mission/config";
 import type { Dest, PartId, StationId, SystemId, TaskId } from "@/lib/mission/config";
 import type { Apod, SpaceWeather } from "@/lib/mission/nasaData";
 import {
   choose, clockLabel, cToF, dayPhase, dismissCard, isBroken, newSim, objectives, outsideTempC,
-  repair, roverFact, snapshot, solarOutput, startTask, stationAction, sunLevel, tasksToNextFact, tick,
+  repair, roverFact, snapshot, wakeUp, collectRock, solarOutput, startTask, stationAction, sunLevel, tasksToNextFact, tick,
 } from "@/lib/mission/sim";
 import type { Card, Diff, RepairMode, Sim, Toast } from "@/lib/mission/sim";
 import { createOutpost, guessQuality } from "./outpostEngine";
 import type { FloatText, Outpost, Quality, StationInfo } from "./outpostEngine";
 import EventCard from "./EventCard";
 import RepairGame from "./RepairGame";
+import SimEnded from "./SimEnded";
 import InventoryPanel from "@/components/menus/InventoryPanel";
 import type { Tab as InvTab } from "@/components/menus/InventoryPanel";
 import { play } from "@/lib/sfx";
 import "./game.css";
 import { speak } from "@/lib/narrator";
 
-// Hotbar: keys 1–7 walk to that station and use it
+// Hotbar: keys 1–8 walk to that station and use it
 const SLOTS: { id: StationId; key: string; icon: string; label: string; task: TaskId }[] = [
   { id: "habitat", key: "1", icon: "🔥", label: "HEATER", task: "heater" },
   { id: "greenhouse", key: "2", icon: "🌱", label: "GREENHOUSE", task: "greenhouse" },
@@ -42,8 +31,9 @@ const SLOTS: { id: StationId; key: string; icon: string; label: string; task: Ta
   { id: "solar", key: "5", icon: "🧹", label: "CLEAN PANELS", task: "clean" },
   { id: "comms", key: "6", icon: "📡", label: "CALL HOUSTON", task: "call" },
   { id: "beacon", key: "7", icon: "🚨", label: "BEACON", task: "beacon" },
+  { id: "lab", key: "8", icon: "🐀", label: "RAT LAB", task: "feedRats" },
 ];
-const STATIONS: StationId[] = SLOTS.map((s) => s.id);
+const STATIONS: StationId[] = [...SLOTS.map((s) => s.id), "bed"]; // + the bed inside the base (no hotbar slot)
 
 type Props = {
   dest: Dest;
@@ -66,6 +56,8 @@ function readHud(s: Sim) {
     battery: s.battery,
     oxygen: s.oxygen,
     food: s.food,
+    stamina: s.stamina,
+    winded: s.winded,
     tempC: s.tempC,
     outside: outsideTempC(s),
     solarPct: Math.round((solarOutput(s) / 0.62) * 100),
@@ -84,6 +76,8 @@ function readHud(s: Sim) {
     calling: s.call ? Math.max(0, Math.ceil(s.call.arrivesAt - s.elapsed)) : -1,
     overtime: s.overtime >= 0 ? Math.ceil(s.overtime) : -1,
     beaconOn: s.beaconOn,
+    rats: { ...s.rats },
+    sleeping: s.sleeping,
     log: s.log.slice(),
     objectives: objectives(s),
     slowed: radiationSpeed(s.doseMsv) < 0.999,
@@ -128,8 +122,12 @@ export default function GameScreen({ dest, name, weather, apod, paused = false, 
   const [invTab, setInvTab] = useState<InvTab>("objectives");
   const [repairing, setRepairing] = useState<SystemId | null>(null);
   const [toasts, setToasts] = useState<(Toast & { born: number })[]>([]);
-  const [near, setNear] = useState<StationId | null>(null);
+  const [near, setNear] = useState<string | null>(null);
   const [quality, setQuality] = useState<Quality>("high");
+  const [rocks, setRocks] = useState({ got: 0, total: 8 }); // space rocks picked up
+  const [partyDone, setPartyDone] = useState(false); //       rescue party finished → show the end card
+  const [simDone, setSimDone] = useState(false); //           lost: "training sim ended" scene finished
+  const finishSim = useCallback(() => setSimDone(true), []);
 
   // live values for callbacks that outlive renders
   const live = useRef({ paused, menu, card, repairing });
@@ -165,7 +163,7 @@ export default function GameScreen({ dest, name, weather, apod, paused = false, 
       cold: s.coldDay || s.elapsed < s.coldUntil,
     });
     e.setHidden(s.sheltering);
-    e.setCanSprint(!s.sick);
+    e.setCanSprint(!s.sick && !s.winded);
     // resting after a storm = 80% speed; a big total dose slows you down more
     e.setSpeedMul((s.sick ? 0.8 : 1) * radiationSpeed(s.doseMsv));
     e.setBeacon(s.beaconOn);
@@ -236,9 +234,18 @@ export default function GameScreen({ dest, name, weather, apod, paused = false, 
       dest,
       name,
       quality: q,
-      onNear: setNear,
-      onUse: (id) => activateStation(id),
-      onQuality: setQuality,
+      onNear: (id) => setNear(id),
+      onUse: (id) => {
+        const station = STATIONS.find((candidate) => candidate === id);
+        if (station) activateStation(station);
+      },
+      onQuality: (quality) => setQuality(quality),
+      onRock: (got, total) => {
+        setRocks({ got, total });
+        collectRock(sim, got, total);
+        play("fixed");
+        return `+${ROCKS.oxygen} OXYGEN`;
+      },
       onRover: () => {
         roverFact(sim); // the rover's "!" → a fun fact card
         play("fact");
@@ -258,7 +265,9 @@ export default function GameScreen({ dest, name, weather, apod, paused = false, 
         e.setProgress(s.task ? 1 - s.task.left / s.task.total : null);
         // greenhouse = walk in and harvest, shelter = walk into the habitat, clean = wipe the solar panels
         const job = s.task?.id;
-        e.setScene(job === "greenhouse" ? "harvest" : job === "shelter" ? "shelter" : job === "clean" ? "clean" : null);
+        e.setScene(
+          job === "greenhouse" ? "harvest" : job === "shelter" ? "shelter" : job === "clean" ? "clean" : job === "feedRats" ? "feed" : null,
+        );
         const now = performance.now();
         if (now - lastSync.current > 100) {
           lastSync.current = now;
@@ -276,7 +285,8 @@ export default function GameScreen({ dest, name, weather, apod, paused = false, 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const anyOverlay = paused || menu !== "none" || !!card || !!repairing || hud.status !== "playing";
+  const showEnd = (hud.status === "lost" && simDone) || partyDone;
+  const anyOverlay = paused || menu !== "none" || !!card || !!repairing || (hud.status !== "playing" && showEnd);
   useEffect(() => engine.current?.setPaused(anyOverlay), [anyOverlay]);
   useEffect(() => { speak(hud.hint, false); }, [hud.hint]);
 
@@ -287,16 +297,24 @@ export default function GameScreen({ dest, name, weather, apod, paused = false, 
     if (hud.status === "won") {
       engine.current?.setLanding(true);
       play("win");
+      // let the ship land and the party play before the end card appears
+      window.setTimeout(() => setPartyDone(true), 9000); // ship lands (4 s) + 5 s of party
     } else play("lose");
   }, [hud]);
 
-  // ---- keyboard: E inventory, ESC inventory → settings tab, 1–7 quick travel ----
+  // ---- keyboard: E inventory, ESC inventory → settings tab, 1–8 quick travel ----
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       if (e.target instanceof HTMLElement && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
       const l = live.current;
       if (l.paused || l.card || l.repairing) return;
+      if (sim.sleeping) {
+        // any key wakes you up
+        e.preventDefault();
+        wakeUp(sim);
+        return;
+      }
       const k = e.key.toLowerCase();
       if (l.menu === "none") {
         if (k === "escape") {
@@ -339,9 +357,10 @@ export default function GameScreen({ dest, name, weather, apod, paused = false, 
   const ended = hud.status !== "playing";
 
   const meters = [
-    { cls: "power", label: "BATTERY", v: hud.battery },
-    { cls: "oxygen", label: "OXYGEN", v: hud.oxygen },
+    { cls: "power", label: "BATTERY",  v: hud.battery },
+    { cls: "oxygen", label: "OXYGEN",  v: hud.oxygen },
     { cls: "food", label: "FOOD", v: hud.food },
+    { cls: "stamina", label: "STAMINA", v: hud.stamina },
   ];
 
   const costChips = (task: TaskId) => {
@@ -367,6 +386,7 @@ export default function GameScreen({ dest, name, weather, apod, paused = false, 
           <h2 className="og-name">{name.toUpperCase()}</h2>
           <div className="og-chips">
             <span className="og-chip target">🚀 RESCUE: END OF {dayWord} {MISSION.days}</span>
+            <span className={`og-chip ${hud.rats.health < 50 ? "hot" : ""}`}>🐀 RATS {Math.round(hud.rats.health)}%</span>
             {hud.sick && <span className="og-chip hot">🤒 RESTING</span>}
             {hud.slowed && <span className="og-chip hot">☢ SLOWED</span>}
             {hud.sheltering && <span className="og-chip ok">🛡️ SHELTERED</span>}
@@ -450,8 +470,12 @@ export default function GameScreen({ dest, name, weather, apod, paused = false, 
             const a = hud.actions[sl.id];
             const broken = a.kind === "repair";
             const dim = a.kind === "blocked";
-            const label = sl.id === "habitat" && a.kind === "task" && a.task === "shelter" ? "SHELTER" : sl.id === "habitat" && a.kind === "leave" ? "LEAVE" : sl.label;
-            const icon = label === "SHELTER" || label === "LEAVE" ? "🛡️" : sl.icon;
+            const label =
+              sl.id === "habitat" && a.kind === "task" && a.task === "shelter" ? "SHELTER"
+              : sl.id === "habitat" && a.kind === "leave" ? "LEAVE"
+              : sl.id === "lab" && a.kind === "task" && a.task === "shieldRats" ? "SHIELD RATS"
+              : sl.label;
+            const icon = label === "SHELTER" || label === "LEAVE" || label === "SHIELD RATS" ? "🛡️" : sl.icon;
             return (
               <button
                 key={sl.id}
@@ -467,6 +491,7 @@ export default function GameScreen({ dest, name, weather, apod, paused = false, 
                   {!broken &&
                     label !== "SHELTER" &&
                     label !== "LEAVE" &&
+                    label !== "SHIELD RATS" &&
                     costChips(sl.task).map((c) => (
                       <span key={c.t} className={c.up ? "up" : "dn"}>{c.up ? "▲" : "▼"}{c.t}</span>
                     ))}
@@ -477,7 +502,7 @@ export default function GameScreen({ dest, name, weather, apod, paused = false, 
         </div>
       </div>
 
-      {/* ---------- Bottom-right: 4 survival meters ---------- */}
+      {/* ---------- Bottom-right: survival meters ---------- */}
       <section className="og-meters og-frame" aria-label="Survival meters">
         {meters.map((m) => (
           <div key={m.cls} className={`og-meter ${m.cls} ${level(m.v)}`}>
@@ -494,12 +519,18 @@ export default function GameScreen({ dest, name, weather, apod, paused = false, 
             <i className="og-fill" style={{ height: `${tempPct}%` }} />
             <i className="og-bulb" />
           </div>
-          <b className="og-mval" title={`${cToF(hud.tempC)} °F`}>{Math.round(hud.tempC)}°C</b>
-          <span className="og-mlabel">TEMP</span>
+          <b className="og-mval" title={`Cabin temperature · ${cToF(hud.tempC)} °F`}>{Math.round(hud.tempC)}°</b>
         </div>
       </section>
 
       {/* ---------- Pop-ups ---------- */}
+      {hud.sleeping && !card && !ended && (
+        <button className="og-sleep" onClick={() => wakeUp(sim)}>
+          <b>😴 Zzz…</b>
+          <span>You&apos;re asleep. The night is passing fast.</span>
+          <span>Press any key or click to wake up.</span>
+        </button>
+      )}
       {card && !paused && (
         <EventCard
           card={card}
@@ -534,7 +565,8 @@ export default function GameScreen({ dest, name, weather, apod, paused = false, 
         />
       )}
 
-      {ended && menu === "none" && (
+      {hud.status === "lost" && !simDone && <SimEnded name={name} onDone={finishSim} />}
+      {ended && showEnd && menu === "none" && (
         <div className="og-end">
           <div className={`og-endcard og-frame ${hud.ending}`}>
             <p className="og-kicker">
@@ -558,6 +590,11 @@ export default function GameScreen({ dest, name, weather, apod, paused = false, 
               <li>⚠ {hud.stats.breakdowns} breakdowns</li>
               <li>☢ {hud.dose.toFixed(1)} mSv total radiation</li>
               <li>📘 {hud.facts} facts collected</li>
+              <li>🐀 Lab rats {Math.round(hud.rats.health)}% healthy{hud.rats.health >= RATS.bonusAt ? " · 🔬 SCIENCE BONUS!" : ""}</li>
+              <li>
+                🪨 {rocks.got}/{rocks.total} space rocks{rocks.got === rocks.total ? " · 🏅 ROCK HOUND!" : ""} ·{" "}
+                {dest === "moon" ? "Apollo astronauts brought 382 kg of Moon rocks home!" : "Perseverance is saving Mars rocks for a trip to Earth!"}
+              </li>
             </ul>
             {hud.ending === "failed" && <p className="why">Failure is a lesson, not a punishment. Real mission planners test ideas again and again.</p>}
             <div className="og-endbtns">

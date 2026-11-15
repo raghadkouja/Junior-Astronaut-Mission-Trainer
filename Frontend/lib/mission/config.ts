@@ -1,3 +1,9 @@
+// =====================================================================
+// lib/mission/config.ts  (NEW)
+// Every number the mission uses lives here.
+//   REAL  = measured / published value (source in the comment)
+//   GAME  = tuned for fun and learning (change freely)
+// =====================================================================
 
 export type Dest = "moon" | "mars";
 export type MeterId = "battery" | "oxygen" | "food" | "temp";
@@ -27,6 +33,18 @@ export const RATES = {
   coldMultiplier: 1.7, //      GAME  cold shadow / cold snap cools the cabin this much faster
   dustPerDay: { moon: 0.04, mars: 0.08 }, // GAME  panels get dustier every day
   blackout: { oxygen: 0.42, temp: 0.12, food: 0.05 }, // GAME  extra losses when battery = 0
+};
+
+// ---------- Stamina (sprinting) ----------
+// GAME: running in a bulky suit tires you out. Real moonwalkers moved in
+// short hops and rested often; Apollo crews' heart rates were watched
+// from Earth so they didn't overwork.
+export const STAMINA = {
+  max: 100,
+  sprintDrain: 20, //   GAME  per second while sprinting (about 5 s of running)
+  regen: 10, //         GAME  per second while walking or standing
+  tiredRegen: 6, //     GAME  slower if you skipped sleep last night
+  windedUntil: 35, //   GAME  hit 0 → no sprinting until it climbs back to this
 };
 
 // ---------- Cabin temperature ----------
@@ -95,8 +113,10 @@ export const BREAKDOWN = {
 export const FACTS_EVERY = { min: 2, max: 3 }; // GAME  a new fact every 2–3 tasks
 
 // ---------- Stations & tasks (no free choices) ----------
-export type StationId = "habitat" | "greenhouse" | "recycle" | "conserve" | "solar" | "comms" | "beacon";
-export type TaskId = "heater" | "shelter" | "greenhouse" | "recycle" | "conserve" | "clean" | "call" | "beacon";
+export type StationId = "habitat" | "greenhouse" | "recycle" | "conserve" | "solar" | "comms" | "beacon" | "lab" | "bed";
+export type TaskId =
+  | "heater" | "shelter" | "greenhouse" | "recycle" | "conserve" | "clean" | "call" | "beacon" | "feedRats" | "shieldRats"
+  | "sleep";
 export type Effects = Partial<{ battery: number; oxygen: number; food: number; tempC: number }>;
 
 export const TASKS: Record<
@@ -143,6 +163,44 @@ export const TASKS: Record<
     effects: { battery: -20 }, needsPower: true,
     teaches: "The rescue ship needs the beacon to find the landing pad.",
   },
+  feedRats: {
+    label: "FEED RATS", verb: "FEED THE LAB RATS", icon: "🐀", secs: 3,
+    effects: { food: -3 }, needsPower: false,
+    teaches: "Animals in space need food, water and care every day, just like astronauts.",
+  },
+  shieldRats: {
+    label: "SHIELD RATS", verb: "MOVE THE RATS TO THE SHIELDED ROOM", icon: "🛡️", secs: 1.5,
+    effects: {}, needsPower: false,
+    teaches: "Space radiation is dangerous for animals too, so they need shielding.",
+  },
+  sleep: {
+    label: "SLEEP", verb: "GO TO SLEEP", icon: "🛏️", secs: 1,
+    effects: {}, needsPower: false,
+    teaches: "NASA schedules 8.5 hours of sleep a night for space station crews.",
+  },
+};
+
+// ---------- Space rocks to collect ----------
+export const ROCKS = {
+  oxygen: 5, // GAME  oxygen you get from each rock
+  // REAL: lunar regolith is about 40-45% oxygen by weight, locked inside minerals (ESA 2019; NASA CaRD)
+};
+
+// ---------- Sleep (bed inside the base) ----------
+export const SLEEP = {
+  realSeconds: 7, // GAME  a night's sleep always takes about 7 real seconds (the rest of the night speeds by)
+  restedMul: 0.8, // GAME  jobs take 20% less time the day after you slept
+  tiredMul: 1.2, //  GAME  jobs take 20% longer if you skipped sleep
+  // REAL: NASA schedules 8.5 hours of sleep a night for ISS crews (they average about 6)
+};
+
+// ---------- Rat lab (inspired by NASA's Rodent Research missions on the ISS) ----------
+export const RATS = {
+  start: 100, //          GAME  rat health at the start (%)
+  hungerLoss: 20, //      GAME  health lost at the end of a day they weren't fed
+  stormLossPerSec: 1.2, // GAME  health lost per second while left out in a radiation storm
+  bonusAt: 70, //         GAME  rats this healthy at the end = science bonus
+  // REAL: each ISS Rodent Habitat holds 10 mice or 6 rats for up to 90 days (ISS National Lab)
 };
 
 // ---------- Systems that can break, and the spare part that fixes each ----------

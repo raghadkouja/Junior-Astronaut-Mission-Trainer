@@ -1,3 +1,14 @@
+/* =========================================================
+   components/game/game.css  (UPDATED)
+   Top-down game screen (GameScreen.tsx).
+   SPEED: removed backdrop-filter blur (it re-blurred the moving canvas
+   60x a second, the main cause of lag on slower computers).
+   Same colorway as the homepage HUD (hud.css): dark panels,
+   thin cyan outlines, clipped corners, amber highlights.
+   Everything is scoped under .og. Sizes use em, so changing
+   --ui-scale makes the whole HUD bigger or smaller.
+   ========================================================= */
+
 .og {
   --c: #3be8ff;
   --c-dim: rgba(59, 232, 255, 0.4);
@@ -302,6 +313,9 @@
 .og-mlabel { font-size: 0.5em; letter-spacing: 0.12em; color: #9eeefc; }
 .og-mval { font-size: 0.75em; color: #fff; }
 .og-meter.low .og-mval { color: #ff9d95; }
+/* stamina refills in seconds, so it moves quickly and doesn't sound the alarm */
+.og-meter.stamina .og-fill { transition: height 0.2s linear; }
+.og-meter.stamina.low .og-cell { animation: none; border-color: #d8f8ff; }
 
 /* ---------- End-of-mission card ---------- */
 .og-end {
@@ -566,4 +580,92 @@
 
 @media (prefers-reduced-motion: reduce) {
   .og * { animation: none !important; transition: none !important; }
+}
+
+/* ---------- Sleeping overlay ---------- */
+.og-sleep {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  display: grid;
+  place-content: center;
+  gap: 0.5em;
+  text-align: center;
+  background: rgba(4, 8, 38, 0.45);
+  color: #cfe8ff;
+  border: 0;
+  font: inherit;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+}
+.og-sleep b {
+  font-size: 1.6em;
+  color: #fff;
+}
+
+
+/* ---------- Mission failed: the training simulation switches off (SimEnded.tsx) ---------- */
+.og-simend {
+  position: absolute;
+  inset: 0;
+  z-index: 12;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  color: #fff;
+  animation: og-sim-glitch 0.7s steps(7) both;
+}
+.og-simend::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.22) 0 2px, transparent 2px 4px);
+}
+.og-simend canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+}
+.og-simend p {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  display: grid;
+  place-content: center;
+  gap: 0.7em;
+  padding: 0 1.5em;
+  text-align: center;
+  letter-spacing: 0.12em;
+  animation: og-sim-text 0.5s ease both;
+}
+.og-simend p b {
+  font-size: 1.6em;
+  color: #3be8ff;
+}
+.og-simend p span {
+  color: #cfe8ff;
+}
+.og-simend p small {
+  color: #8a90a0;
+  font-size: 0.75em;
+}
+@keyframes og-sim-glitch {
+  0% { backdrop-filter: none; transform: none; }
+  20% { backdrop-filter: hue-rotate(80deg) contrast(1.8); transform: translateX(-6px); }
+  40% { backdrop-filter: invert(0.85); transform: translateX(5px); }
+  60% { backdrop-filter: hue-rotate(-60deg) saturate(3); transform: translateX(-3px); }
+  80% { backdrop-filter: contrast(2) brightness(1.4); transform: none; }
+  100% { backdrop-filter: none; transform: none; }
+}
+@keyframes og-sim-text {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .og-simend, .og-simend p { animation: none; }
 }

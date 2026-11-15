@@ -33,6 +33,7 @@ export type OutpostOptions = {
   onFrame?: (dt: number) => void; // runs every animation frame (the mission clock uses it)
   onQuality?: (q: Quality) => void; // engine switched to low quality because frames were slow
   onRover?: () => void; // the player checked what the rover found
+  onRock?: (got: number, total: number) => string | void; // picked up a space rock (may return a reward to show)
 };
 
 export type Outpost = {
@@ -79,6 +80,8 @@ const BATT = R(32, 4, 6, 4);
 const DISH = R(21, 13, 3, 3); //  middle column, under the habitat door
 const PAD = R(18.5, 20, 8, 6); // bottom middle, centered under the habitat
 const DOCK = R(28, 10, 3, 2); // rover charging dock (flat: you can walk over it)
+// REAL surface gravity in m/s² (NASA planetary fact sheets). Earth is 9.81.
+const GRAVITY: Record<WorldDest, number> = { moon: 1.62, mars: 3.71 };
 const LAB = R(32, 20, 7, 5); //   rat lab: right column, bottom row
 const MAST = { x: PAD.x + PAD.w - 14, y: PAD.y + 4, w: 8, h: 10 };
 // Inside the base: walls with a door gap at the bottom, and furniture you bump into
@@ -494,6 +497,21 @@ export function createOutpost(canvas: HTMLCanvasElement, opts: OutpostOptions): 
   let rats: RatInfo = { health: 100, shielded: false, fed: false };
   let sleeping = false;
   let zzzAt = 0;
+  // space rocks to pick up (like the Apollo astronauts' rock samples)
+  const rocks: { x: number; y: number; got: boolean }[] = [];
+  let rocksGot = 0;
+  for (let k = 0; rocks.length < 8 && k < 400; k++) {
+    const x = 30 + Math.random() * (WW - 60);
+    const y = 30 + Math.random() * (WH - 50);
+    if (blocked(x, y) || inside(x, y, HAB, 12) || inside(x, y, DOCK, 10)) continue;
+    if (STATION_IDS.some((id) => inside(x, y, STATIONS[id].rect, 20))) continue;
+    if (rocks.some((r) => Math.hypot(r.x - x, r.y - y) < 60)) continue;
+    rocks.push({ x, y, got: false });
+  }
+  let wasAir = false; // for the little dust puff when a hop lands
+  let nextFirework = 0;
+  let star: { x: number; y: number; vx: number; vy: number; life: number } | null = null;
+  let nextStar = 6;
   // bootprints in the dust
   const prints: { x: number; y: number; born: number }[] = [];
   let stepDist = 0;
@@ -754,6 +772,24 @@ export function createOutpost(canvas: HTMLCanvasElement, opts: OutpostOptions): 
 
     const moved = Math.hypot(player.x - bx, player.y - by);
     player.moving = moved > 0.01;
+    // low-gravity hops: a puff of dust each time you land
+    const hopNow = hopHeight();
+    if (wasAir && hopNow === 0 && player.moving) {
+      for (let j = 0; j < 3; j++)
+        parts.push({ x: player.x + (Math.random() - 0.5) * 8, y: player.y, vx: (Math.random() - 0.5) * 16, vy: -4, life: 0, max: 0.4, c: PAL[dest].speck[1], s: 1 });
+    }
+    wasAir = hopNow > 2;
+    // pick up space rocks by walking over them
+    for (const r of rocks) {
+      if (r.got || Math.hypot(player.x - r.x, player.y - r.y) > 9) continue;
+      r.got = true;
+      rocksGot++;
+      floats.push({ x: r.x, y: r.y - 6, text: `+1 SPACE ROCK (${rocksGot}/${rocks.length})`, color: "#ffd25a", age: 0 });
+      for (let j = 0; j < 10; j++)
+        parts.push({ x: r.x, y: r.y - 2, vx: (Math.random() - 0.5) * 30, vy: -10 - Math.random() * 20, life: 0, max: 0.6, c: j % 2 ? "#ffffff" : "#ffd25a", s: 1 });
+      const reward = opts.onRock?.(rocksGot, rocks.length);
+      if (reward) floats.push({ x: r.x, y: r.y - 6, text: reward, color: "#7dffb0", age: -0.45 });
+    }
     if (player.moving && !insideBase()) {
       // bootprints in the dust, left-right-left (they fade away after a while)
       stepDist += moved;
@@ -1138,6 +1174,83 @@ export function createOutpost(canvas: HTMLCanvasElement, opts: OutpostOptions): 
       }
   }
 
+  // ----- fun extras -----
+  const celebrating = () => landing && landT > 4; // the rescue ship has landed!
+
+  // Low gravity: floaty bunny hops. Same push off the ground on both worlds, so with
+  // lower gravity you go higher and stay up longer (height and hang time both scale with 1/g).
+  function hopHeight() {
+    if (celebrating() && !player.moving) return Math.round(Math.abs(Math.sin(t * 6)) * 5); // happy jumps
+    if (!player.moving || insideBase() || (scene && sceneOk)) return 0;
+    const g = GRAVITY[dest];
+    const height = 7 * (GRAVITY.moon / g); // Moon 7 px, Mars about 3 px
+    const rate = 0.42 * (g / GRAVITY.moon); // Mars hops come about 2.3x as often
+    return Math.round(Math.abs(Math.sin(player.walk * rate)) * height);
+  }
+
+  // Rescue party: fireworks over the base and confetti raining down
+  function party(dt: number) {
+    const cols = ["#ff6a5a", "#ffd25a", "#7dffb0", "#3be8ff", "#ff9ad8", "#ffffff"];
+    if (landT > nextFirework) {
+      nextFirework = landT + 0.5 + Math.random() * 0.6;
+      const fx = PAD.x + PAD.w / 2 + (Math.random() - 0.5) * 260;
+      const fy = HAB.y + 20 + Math.random() * 140;
+      const c = cols[(Math.random() * cols.length) | 0];
+      const n = quality === "low" ? 14 : 28;
+      for (let i = 0; i < n; i++) {
+        const a = (i / n) * Math.PI * 2;
+        const sp = 35 + Math.random() * 25;
+        parts.push({ x: fx, y: fy, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 0, max: 0.9 + Math.random() * 0.4, c, s: Math.random() < 0.4 ? 2 : 1 });
+      }
+    }
+    const viewW = cssW / zoom;
+    for (let i = 0; i < (quality === "low" ? 1 : 3); i++) {
+      if (Math.random() > dt * 18) continue;
+      parts.push({
+        x: cam.x + Math.random() * viewW, y: cam.y + 2, vx: (Math.random() - 0.5) * 14, vy: 22 + Math.random() * 18,
+        life: 0, max: 3 + Math.random(), c: cols[(Math.random() * cols.length) | 0], s: 2,
+      });
+    }
+  }
+
+  // Sparkly space rocks lying around the map
+  function drawRocks() {
+    for (const r of rocks) {
+      if (r.got) continue;
+      const x = Math.round(r.x);
+      const y = Math.round(r.y);
+      px(ctx, x - 3, y - 1, 7, 3, "rgba(0,0,0,0.3)");
+      px(ctx, x - 3, y - 4, 6, 4, INK);
+      px(ctx, x - 2, y - 3, 4, 2, dest === "mars" ? "#c9773f" : "#9aa0ae");
+      px(ctx, x - 1, y - 4, 2, 1, "#e3e7ef");
+      if (Math.sin(t * 3 + x) > 0.6) {
+        px(ctx, x + 2, y - 8, 1, 3, "#fff3b0"); // twinkle so kids can spot them
+        px(ctx, x + 1, y - 7, 3, 1, "#fff3b0");
+      }
+    }
+  }
+
+  // Now and then at night, a shooting star streaks across the sky
+  function drawShootingStar(dt: number) {
+    if (dark < 0.6) return;
+    const W = buf.width;
+    const H = buf.height;
+    if (!star && t > nextStar) {
+      star = { x: Math.random() * W * 0.7, y: Math.random() * H * 0.3, vx: 120 + Math.random() * 80, vy: 40 + Math.random() * 30, life: 0 };
+      nextStar = t + 5 + Math.random() * 7;
+    }
+    if (!star) return;
+    star.life += dt;
+    star.x += star.vx * dt;
+    star.y += star.vy * dt;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    for (let i = 0; i < 10; i++) {
+      ctx.fillStyle = `rgba(255,255,255,${(1 - i / 10) * 0.9})`;
+      ctx.fillRect(Math.round(star.x - star.vx * 0.012 * i), Math.round(star.y - star.vy * 0.012 * i), 2, 1);
+    }
+    if (star.life > 0.9 || star.x > W || star.y > H) star = null;
+  }
+
   // ----- bootprints -----
   function drawPrints() {
     while (prints.length && t - prints[0].born > 25) prints.shift();
@@ -1285,9 +1398,10 @@ export function createOutpost(canvas: HTMLCanvasElement, opts: OutpostOptions): 
         const rx = eating
           ? cx + 7 + (Math.sin(t * 20) > 0 ? 1 : 0)
           : cx + 2 + Math.round((Math.sin(t * sp + c * 2) * 0.5 + 0.5) * 7);
-        px(ctx, rx, cy + 8, 4, 3, "#b9bec9");
-        px(ctx, rx + 4, cy + 8, 1, 1, "#ff9ad8"); // nose
-        px(ctx, rx - 2, cy + 10, 2, 1, "#ff9ad8"); // tail
+        const cheer = celebrating() ? Math.round(Math.abs(Math.sin(t * 8 + c)) * 3) : 0; // rats jump for joy at the rescue
+        px(ctx, rx, cy + 8 - cheer, 4, 3, "#b9bec9");
+        px(ctx, rx + 4, cy + 8 - cheer, 1, 1, "#ff9ad8"); // nose
+        px(ctx, rx - 2, cy + 10 - cheer, 2, 1, "#ff9ad8"); // tail
       }
       for (let b = 0; b < 4; b++) px(ctx, cx + 3 + b * 4, cy + 1, 1, 12, "#a9b0c0"); // bars
       px(ctx, cx + 11, cy + 10, 4, 2, rats.fed || t - fedAt[c] < 5 ? "#ffd25a" : "#6b7080"); // food bowl: full after feeding
@@ -1647,7 +1761,8 @@ export function createOutpost(canvas: HTMLCanvasElement, opts: OutpostOptions): 
       B: "#c9ced9",
     };
     const f = player.facing;
-    const frame = player.moving ? 1 + (Math.floor(player.walk) % 2) : 0;
+    const hop = hopHeight();
+    const frame = player.moving && hop <= 1 ? 1 + (Math.floor(player.walk) % 2) : 0; // legs together in the air
     const body = f === "down" ? BODY_FRONT : f === "up" ? BODY_BACK : BODY_SIDE;
     const legs = f === "left" || f === "right" ? LEGS_SIDE[frame] : LEGS_FRONT[frame];
     const rows = [...body, ...legs];
@@ -1656,10 +1771,11 @@ export function createOutpost(canvas: HTMLCanvasElement, opts: OutpostOptions): 
     const sx = Math.round(player.x);
     const sy = Math.round(player.y);
     const ox = sx - 6;
-    const oy = sy - 16 + bob;
+    const oy = sy - 16 + bob - hop;
     // shadow
-    px(ctx, sx - 5, sy - 1, 10, 2, "rgba(0,0,0,0.35)");
-    px(ctx, sx - 4, sy - 2, 8, 4, "rgba(0,0,0,0.2)");
+    const shrink = hop > 3 ? 1 : 0; // the shadow gets smaller while you're up in the air
+    px(ctx, sx - 5 + shrink, sy - 1, 10 - shrink * 2, 2, "rgba(0,0,0,0.35)");
+    px(ctx, sx - 4 + shrink, sy - 2, 8 - shrink * 2, 4, "rgba(0,0,0,0.2)");
     for (let ry = 0; ry < rows.length; ry++) {
       const row = rows[ry];
       for (let rx = 0; rx < 12; rx++) {
@@ -2015,6 +2131,7 @@ export function createOutpost(canvas: HTMLCanvasElement, opts: OutpostOptions): 
     dark += (darkGoal - dark) * Math.min(1, ddt * 2.5);
     night = dark > 0.5;
     if (landing) landT += ddt;
+    if (celebrating()) party(ddt);
     for (const f of floats) f.age += ddt;
     while (floats.length && floats[0].age > 1.7) floats.shift();
     for (const p of parts) {
@@ -2041,6 +2158,7 @@ export function createOutpost(canvas: HTMLCanvasElement, opts: OutpostOptions): 
     drawCables();
     drawDock();
     drawPrints();
+    drawRocks();
 
     const items: { y: number; draw: () => void }[] = [
       insideBase() || sleeping ? { y: HAB.y, draw: drawBaseInside } : { y: HAB.y + HAB.h, draw: drawHabitat },
@@ -2074,6 +2192,7 @@ export function createOutpost(canvas: HTMLCanvasElement, opts: OutpostOptions): 
     drawProgress();
     drawNight();
     drawWeather(ddt);
+    drawShootingStar(ddt);
 
     screen.setTransform(1, 0, 0, 1, 0, 0);
     screen.imageSmoothingEnabled = false;

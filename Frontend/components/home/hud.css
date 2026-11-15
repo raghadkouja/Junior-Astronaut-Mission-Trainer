@@ -362,6 +362,9 @@ b.cool { color: var(--c); } b.warm { color: var(--amber); } b.hot { color: var(-
   transition: all 0.15s;
 }
 .dest-key:hover { border-color: var(--c); color: #fff; }
+.settings-key { padding: 0.6rem; justify-content: center; }
+.settings-key svg { width: 1.25rem; height: 1.25rem; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; transition: transform 0.4s ease; }
+.settings-key:hover svg { transform: rotate(60deg); }
 .dk-dot { width: 10px; height: 10px; border-radius: 50%; border: 1.5px solid currentColor; }
 .dest-key.active { border-color: var(--amber); color: #fff; background: rgba(255, 179, 71, 0.12); box-shadow: 0 0 16px rgba(255, 179, 71, 0.35); }
 .dest-key.active .dk-dot { background: var(--amber); border-color: var(--amber); box-shadow: 0 0 8px var(--amber); }
